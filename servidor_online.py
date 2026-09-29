@@ -74,6 +74,7 @@ def login_web():
             cur.execute('SELECT id,login,senha_hash,perfil,ativo FROM usuarios_web WHERE login=%s',(login,)); r=cur.fetchone()
             if not r or not r[4] or not check_password_hash(r[2],senha): return jsonify({'ok':False,'erro':'credenciais invalidas'}),401
             token=uuid.uuid4().hex+uuid.uuid4().hex
+            cur.execute('DELETE FROM sessoes_web WHERE expira_em<=NOW()')
             cur.execute("INSERT INTO sessoes_web(token,usuario_id,expira_em) VALUES (%s,%s,NOW()+INTERVAL '12 hours')",(token,r[0]))
         conn.commit()
     return jsonify({'ok':True,'token':token,'usuario':{'login':r[1],'perfil':r[3]}})
@@ -82,6 +83,17 @@ def login_web():
 def me_web():
     u=web_user()
     return jsonify({'ok':True,'usuario':u}) if u else (jsonify({'ok':False,'erro':'nao autorizado'}),401)
+
+@app.post('/api/v1/web/logout')
+def logout_web():
+    auth=request.headers.get('Authorization','')
+    token=auth[7:].strip() if auth.startswith('Bearer ') else ''
+    if token:
+        init_db()
+        with get_conn() as conn:
+            with conn.cursor() as cur: cur.execute('DELETE FROM sessoes_web WHERE token=%s',(token,))
+            conn.commit()
+    return jsonify({'ok':True})
 
 def auth_eventos():
     return machine_auth() or bool(web_user())
