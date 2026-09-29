@@ -5,9 +5,24 @@ from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
+
+WEB_ORIGIN = 'https://comabem-homologacao.onrender.com'
+
+@app.after_request
+def cors_headers(resp):
+    origin = request.headers.get('Origin', '')
+    if origin == WEB_ORIGIN:
+        resp.headers['Access-Control-Allow-Origin'] = WEB_ORIGIN
+        resp.headers['Vary'] = 'Origin'
+        resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    return resp
+
+@app.route('/api/v1/<path:_path>', methods=['OPTIONS'])
+def api_options(_path):
+    return ('', 204)
 
 API_TOKEN = os.environ.get('COMABEM_API_TOKEN', '').strip()
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
@@ -70,6 +85,17 @@ def login():
             cur.execute("INSERT INTO sessoes_web(token,usuario_id,expira_em) VALUES (%s,%s,NOW()+INTERVAL '12 hours')",(token,row[0]))
         conn.commit()
     return jsonify({'ok':True,'token':token,'usuario':{'login':row[1],'perfil':row[3]}})
+
+@app.post('/api/v1/web/logout')
+def logout():
+    auth=request.headers.get('Authorization','')
+    token=auth[7:].strip() if auth.startswith('Bearer ') else ''
+    if token:
+        init_db()
+        with get_conn() as conn:
+            with conn.cursor() as cur: cur.execute('DELETE FROM sessoes_web WHERE token=%s',(token,))
+            conn.commit()
+    return jsonify({'ok':True})
 
 @app.get('/api/v1/web/me')
 def me():
