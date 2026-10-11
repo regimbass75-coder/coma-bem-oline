@@ -58,6 +58,11 @@ def web_user():
             r=cur.fetchone()
     return {'id':r[0],'login':r[1],'perfil':r[2]} if r else None
 
+
+@app.get('/')
+def pagina_inicial_homologacao():
+    return ('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UniGestor - Homologação</title></head><body style="font-family:Arial,sans-serif;max-width:680px;margin:70px auto;padding:20px"><h1>UniGestor - Ambiente de Homologação</h1><p>Servidor de testes online. Este endereço não é o sistema principal.</p><p>O Painel Master completo ainda não está publicado neste serviço.</p></body></html>', 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'})
+
 @app.get('/health')
 def health():
     try:
