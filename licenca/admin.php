@@ -175,8 +175,10 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
   else $flash='Licença não encontrada; nenhuma alteração realizada.';
  }
  }finally{if($ugLock){flock($ugLock,LOCK_UN);fclose($ugLock);}}
- // Atualiza a visão após alterações (inclusive criação coordenada).
- $licenses=read_json(LICENSE_FILE,[]);$restaurants=read_json(RESTAURANTS_FILE,[]);$users=read_json(USERS_FILE,[]);
+ // Após POST, redirecionar para GET para F5 não repetir bloqueio/desbloqueio.
+ $_SESSION['ug_master_flash']=$flash;
+ header('Location: admin.php',true,303);
+ exit;
 }
 
 $stats=[
