@@ -1,5 +1,12 @@
 <?php
-const DATA_DIR = __DIR__ . '/data';
+// Configurável para volume persistente externo; padrão antigo mantido apenas para homologação.
+// No Render Free, o diretório local continua temporário mesmo com esta opção.
+define('DATA_DIR', (static function(){
+ $configured = trim((string)(getenv('UG_DATA_DIR') ?: ''));
+ if($configured === '') return __DIR__ . '/data';
+ if($configured[0] !== '/') throw new RuntimeException('UG_DATA_DIR deve ser um caminho absoluto');
+ return rtrim($configured, '/');
+})());
 const ADMIN_FILE = DATA_DIR . '/admin.json';
 const LICENSE_FILE = DATA_DIR . '/licenses.json';
 const RESTAURANTS_FILE = DATA_DIR . '/restaurants.json';
