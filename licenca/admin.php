@@ -7,7 +7,8 @@ function ug_master_csrf_field():string{return '<input type="hidden" name="ug_csr
 $licenses=read_json(LICENSE_FILE,[]);
 $restaurants=read_json(RESTAURANTS_FILE,[]);
 $users=read_json(USERS_FILE,[]);
-$flash='';
+$flash=(string)($_SESSION['ug_master_flash']??'');
+unset($_SESSION['ug_master_flash']);
 function ug_limit($value){return max(1,min(500,(int)$value));}
 function ug_price($value){$v=str_replace(',','.',trim((string)$value));return is_numeric($v)?round(max(0,(float)$v),2):0;}
 
