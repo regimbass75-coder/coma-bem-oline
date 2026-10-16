@@ -176,10 +176,10 @@ def homolog_master_bridge():
     try:
         with urlopen(upstream_request, timeout=25) as upstream:
             payload, status = upstream.read(16384), upstream.status
-            set_cookie = upstream.headers.get('Set-Cookie', '')
+            set_cookie = upstream.headers.get_all('Set-Cookie', [])[-1] if headers.get_all('Set-Cookie', []) else ''
     except HTTPError as exc:
         payload, status = exc.read(16384), exc.code
-        set_cookie = exc.headers.get('Set-Cookie', '')
+        set_cookie = exc.headers.get_all('Set-Cookie', [])[-1] if headers.get_all('Set-Cookie', []) else ''
     except (URLError, TimeoutError):
         return jsonify({'ok': False, 'erro': 'Painel Master indisponível.'}), 503
     try:
