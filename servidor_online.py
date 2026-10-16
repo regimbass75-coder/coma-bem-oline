@@ -152,11 +152,11 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'company_backup'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
     if action in ('login', 'logout', 'users_create', 'users_update', 'sales_create') and request.method != 'POST':
         return jsonify({'ok': False, 'erro': 'Use POST.'}), 405
-    if action in ('', 'me', 'users_list', 'sales_list') and request.method != 'GET':
+    if action in ('', 'me', 'users_list', 'sales_list', 'company_backup') and request.method != 'GET':
         return jsonify({'ok': False, 'erro': 'Use GET.'}), 405
     params = {'action': action} if action else {'key': (request.args.get('key') or '').strip().upper()}
     if not action and (not params['key'] or len(params['key']) > 128):
@@ -175,13 +175,19 @@ def homolog_master_bridge():
     upstream_request = Request(target, data=body, headers=headers, method=request.method)
     try:
         with urlopen(upstream_request, timeout=25) as upstream:
-            payload, status = upstream.read(16384), upstream.status
+            payload, status = upstream.read(16777216), upstream.status
             set_cookie = next((h for h in reversed(upstream.headers.get_all('Set-Cookie', [])) if h.startswith('COMABEM_APP=')), '')
     except HTTPError as exc:
         payload, status = exc.read(16384), exc.code
         set_cookie = next((h for h in reversed(exc.headers.get_all('Set-Cookie', [])) if h.startswith('COMABEM_APP=')), '')
     except (URLError, TimeoutError):
         return jsonify({'ok': False, 'erro': 'Painel Master indisponível.'}), 503
+    if action == 'company_backup' and status == 200 and payload.startswith(b'PK'):
+        response = make_response(payload, 200)
+        response.headers['Content-Type'] = 'application/zip'
+        response.headers['Content-Disposition'] = 'attachment; filename="UniGestor-backup-empresa.zip"'
+        response.headers['Cache-Control'] = 'no-store, private'
+        return response
     try:
         data = json.loads(payload)
         if not isinstance(data, dict):
