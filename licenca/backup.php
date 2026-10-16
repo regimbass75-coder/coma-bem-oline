@@ -7,7 +7,7 @@ if (!class_exists('ZipArchive')) { http_response_code(503); exit('Extensão ZipA
 $root=realpath(dirname(__DIR__));
 if ($root===false) { http_response_code(500); exit('Raiz inválida.'); }
 // Backup temporário fora da raiz pública, nunca em /data/backups.
-$private=dirname($root).'/.ug_private_backups_'.substr(hash('sha256',$root),0,12);
+$private=rtrim(DATA_DIR,'/').'/.ug_private_backups_'.substr(hash('sha256',$root),0,12);
 if ((!is_dir($private) && !@mkdir($private,0700,true)) || is_link($private)) { http_response_code(500); exit('Diretório privado indisponível.'); }
 @chmod($private,0700);
 $path=tempnam($private,'ug_backup_');
