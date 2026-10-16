@@ -170,6 +170,7 @@ def homolog_master_bridge():
     cookie = request.cookies.get('COMABEM_APP', '')
     if cookie:
         headers['Cookie'] = 'COMABEM_APP=' + cookie
+    app.logger.warning('bridge action=%s incoming_cookie=%s', action, bool(cookie))
     target = 'https://unigestor-master-teste.onrender.com/licenca/api.php?' + urlencode(params)
     upstream_request = Request(target, data=body, headers=headers, method=request.method)
     try:
@@ -187,6 +188,7 @@ def homolog_master_bridge():
             raise ValueError('invalid JSON')
     except (ValueError, UnicodeDecodeError):
         return jsonify({'ok': False, 'erro': 'Resposta inválida do Painel Master.'}), 502
+    app.logger.warning('bridge action=%s status=%s response_cookie=%s', action, status, bool(set_cookie))
     response = make_response(jsonify(data), status)
     response.headers['Cache-Control'] = 'no-store'
     if set_cookie:
