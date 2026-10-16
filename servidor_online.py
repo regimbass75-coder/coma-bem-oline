@@ -152,17 +152,17 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
-    if action in ('login', 'logout', 'users_create', 'users_update') and request.method != 'POST':
+    if action in ('login', 'logout', 'users_create', 'users_update', 'sales_create') and request.method != 'POST':
         return jsonify({'ok': False, 'erro': 'Use POST.'}), 405
-    if action in ('', 'me', 'users_list') and request.method != 'GET':
+    if action in ('', 'me', 'users_list', 'sales_list') and request.method != 'GET':
         return jsonify({'ok': False, 'erro': 'Use GET.'}), 405
     params = {'action': action} if action else {'key': (request.args.get('key') or '').strip().upper()}
     if not action and (not params['key'] or len(params['key']) > 128):
         return jsonify({'ok': False, 'status': 'SEM_CHAVE'}), 400
     body = request.get_data(cache=False) if request.method == 'POST' else None
-    if body and len(body) > 8192:
+    if body and len(body) > 32768:
         return jsonify({'ok': False, 'erro': 'Requisição muito grande.'}), 413
     headers = {'Accept': 'application/json'}
     if body is not None:
