@@ -1173,7 +1173,7 @@ function usuarioAtualCaixa(){
  let u=window.__cbUsuarioLogado;
  if(!u || !(u.name||u.login)){
    try{
-     const key=Object.keys(sessionStorage).find(k=>k.includes('cb_app_session')||k.includes('cb_ug_sessao'));
+     const key='comabem_session_user';
      const saved=key?JSON.parse(sessionStorage.getItem(key)||'null'):null;
      if(saved && (saved.nome||saved.login))u={id:saved.id||null,name:saved.nome||saved.login,login:saved.login};
    }catch(e){}
@@ -1712,7 +1712,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
    }catch(e){}
    return false;
  }
@@ -1781,7 +1781,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      const r=await fetch(API+'?action=login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,senha}),cache:'no-store'});
      const d=await r.json();
      if(!r.ok||!d.ok) throw new Error(d.erro||'Usuário ou senha inválidos.');
-     sessionStorage.setItem(SESSION,JSON.stringify({login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));
+     sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));
      window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d);
      document.getElementById('cbLoginGate')?.remove();
    }catch(e){
