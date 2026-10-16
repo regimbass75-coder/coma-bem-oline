@@ -292,10 +292,10 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;bord
 </tbody></table>
 </div>
 <div class="card section-blue">
-<h2>💼 Pacotes, acessos e módulos por empresa</h2>
-<p class="small">Configure o segmento, os módulos visíveis e o número de acessos contratados. O controle efetivo de sessões simultâneas depende de integração com a autenticação do sistema e não está ativado por esta atualização.</p>
+<h2 id="editar-pacotes-empresa">💼 Pacotes, acessos e módulos por empresa</h2>
+<p class="small">Configure o segmento, os módulos visíveis e o número de acessos contratados. As alterações do pacote passam a valer no próximo login do Gestor.</p>
 <?php foreach($restaurants as $r): ?>
-<details style="border:1px solid #dfe5eb;border-radius:8px;padding:12px;margin:10px 0;background:#fff">
+<details id="editar-empresa-<?=h($r['id']??'')?>" style="border:1px solid #dfe5eb;border-radius:8px;padding:12px;margin:10px 0;background:#fff">
 <summary style="cursor:pointer;font-weight:bold"><?=h($r['name']??'Empresa')?> — <?=ug_limit($r['access_limit']??1)?> acesso(s) — R$ <?=number_format((float)($r['package_price']??0),2,',','.')?></summary>
 <form method="post" class="formgrid" style="margin-top:12px"><?=ug_master_csrf_field()?>
 <input type="hidden" name="act" value="update_package"><input type="hidden" name="restaurant_id" value="<?=h($r['id']??'')?>">
@@ -322,7 +322,7 @@ $r=array_values(array_filter($restaurants,fn($x)=>($x['id']??'')===$rid)); $r=$r
 <td><?=h($l['client']??'')?></td><td class="key"><?=h($l['key']??'')?></td>
 <td class="<?=$st==='ATIVA'?'ok':($st==='BLOQUEADA'?'bad':'warn')?>"><?=$st?><br><?php if($st==='ATIVA'):?><?=days_left($l)?> dias<?php endif?></td>
 <td><?=h($l['expires_at']??'')?></td>
-<td class="actions">
+<td class="actions"><a href="#editar-pacotes-empresa" onclick="setTimeout(function(){var el=document.getElementById('editar-empresa-<?=h($rid)?>');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}},50)" style="display:inline-block;padding:8px 10px;background:#1656a2;color:#fff;border-radius:6px;text-decoration:none;font-weight:700">✏️ Editar empresa</a>
 <form method="post"><?=ug_master_csrf_field()?><input type="hidden" name="act" value="extend"><input type="hidden" name="key" value="<?=h($l['key'])?>"><select name="days"><option>30</option><option>60</option><option>90</option><option>365</option></select><button>Renovar</button></form>
 <form method="post"><?=ug_master_csrf_field()?><input type="hidden" name="act" value="toggle"><input type="hidden" name="key" value="<?=h($l['key'])?>"><button><?=$l['blocked']?'Desbloquear':'Bloquear'?></button></form>
 </td></tr>
