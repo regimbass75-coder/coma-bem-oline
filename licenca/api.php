@@ -81,7 +81,7 @@ if($action==='login'){
 if($action==='me'){
   start_app();
   try{$sessionOk=ug_session_valid();}catch(Throwable $e){$sessionOk=false;}
-  if(!$sessionOk){ug_end_session();outj(['ok'=>false,'erro'=>'Sessão expirada ou revogada.'],401);}
+  if(!$sessionOk){error_log('[UniGestor] me session invalid: has_user='.(empty($_SESSION['user_id'])?'0':'1').' has_restaurant='.(empty($_SESSION['restaurant_id'])?'0':'1').' cookie='.(isset($_COOKIE[session_name()])?'1':'0'));ug_end_session();outj(['ok'=>false,'erro'=>'Sessão expirada ou revogada.'],401);}
   $u=ug_user_by_session();
   if(!$u||!ug_restaurant_is_active($_SESSION['restaurant_id']??'')){ug_end_session();outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);}
   $lic=license_for_restaurant($_SESSION['restaurant_id']);
@@ -94,7 +94,7 @@ if($action==='me'){
 if(in_array($action,['users_list','users_create','users_update'],true)){
   start_app();
   try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
-  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  if(!$valid){error_log('[UniGestor] users session invalid: has_user='.(empty($_SESSION['user_id'])?'0':'1').' has_restaurant='.(empty($_SESSION['restaurant_id'])?'0':'1').' cookie='.(isset($_COOKIE[session_name()])?'1':'0').' session_active='.(session_status()===PHP_SESSION_ACTIVE?'1':'0'));outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);}
   $actor=ug_user_by_session();
   $rid=(string)($_SESSION['restaurant_id']??'');
   if(!$actor||!ug_restaurant_is_active($rid)||!in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true)
