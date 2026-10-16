@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
@@ -61,7 +61,15 @@ def web_user():
 
 @app.get('/')
 def pagina_inicial_homologacao():
-    return ('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UniGestor - Homologação</title></head><body style="font-family:Arial,sans-serif;max-width:680px;margin:70px auto;padding:20px"><h1>UniGestor - Ambiente de Homologação</h1><p>Servidor de testes online. Este endereço não é o sistema principal.</p><p>O Painel Master completo ainda não está publicado neste serviço.</p></body></html>', 200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'})
+    return send_from_directory('homologacao', 'index.html')
+
+@app.get('/manifest.webmanifest')
+def manifest_homologacao():
+    return send_from_directory('homologacao', 'manifest.webmanifest')
+
+@app.get('/service-worker.js')
+def service_worker_homologacao():
+    return send_from_directory('homologacao', 'service-worker.js')
 
 @app.get('/health')
 def health():
