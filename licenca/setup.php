@@ -3,7 +3,7 @@ if(isset($_GET['logout'])){ session_destroy(); header('Location: setup.php'); ex
 $msg='';
 if(!configured() && $_SERVER['REQUEST_METHOD']==='POST'){
  $setupToken=(string)getenv('UG_SETUP_TOKEN');
- if(strlen($setupToken)<32 || !hash_equals($setupToken,(string)($_POST['setup_token']??''))){http_response_code(403);$msg='Instalação inicial bloqueada: configure UG_SETUP_TOKEN (mínimo 32 caracteres) no Render e informe o código correto.';}
+ if(strlen($setupToken)<32){http_response_code(503);$msg='O servidor ainda não recebeu um UG_SETUP_TOKEN válido (mínimo 32 caracteres). Verifique a publicação das variáveis no Render.';} elseif(!hash_equals($setupToken,(string)($_POST['setup_token']??''))){http_response_code(403);$msg='O código digitado não coincide com o código configurado no Render. Confira espaços extras ao copiar, sem enviar o código a ninguém.';}
  else {
  $p=(string)($_POST['password']??''); $p2=(string)($_POST['password2']??'');
  if(strlen($p)<8) $msg='Use uma senha com pelo menos 8 caracteres.'; elseif($p!==$p2) $msg='As senhas não conferem.'; else { write_json(ADMIN_FILE,['password_hash'=>password_hash($p,PASSWORD_DEFAULT),'created_at'=>date('c')]); $_SESSION['master_ok']=true; header('Location: admin.php'); exit; }
