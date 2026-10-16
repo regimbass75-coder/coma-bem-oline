@@ -1778,11 +1778,13 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
 <script id="comabem-login-gate-v334">
 (()=>{
  const SESSION='comabem_session_user';
+  const OFFLINE_SESSION='ug_offline_user_snapshot_v2';
+  function storeOffline(d){try{localStorage.setItem(OFFLINE_SESSION,JSON.stringify({user:d.user,restaurant:d.restaurant,modules:d.modules,validated_at:Date.now()}))}catch(e){}}
  const API='./licenca/api.php';
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);return true;}
    }catch(e){}
    return false;
  }
@@ -1852,7 +1854,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      const d=await r.json();
      if(!r.ok||!d.ok) throw new Error(d.erro||'Usuário ou senha inválidos.');
      sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));
-     window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); window.ugAtualizarVendasCentrais?.();
+     window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); storeOffline(d); window.ugAtualizarVendasCentrais?.();
      document.getElementById('cbLoginGate')?.remove();
    }catch(e){
      if(m)m.textContent=e.message||'Não foi possível entrar.';
@@ -1863,14 +1865,16 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  async function start(){
    if(!navigator.onLine){
     try{
-     const cached=JSON.parse(sessionStorage.getItem(SESSION)||'null');
-     if(cached&&cached.user&&cached.restaurant&&cached.modules&&cached.validado_em&&Date.now()>=cached.validado_em&&Date.now()-cached.validado_em<86400000&&window.__ugLicencaOffline){
+     const cached=JSON.parse(localStorage.getItem(OFFLINE_SESSION)||'null');
+     const license=JSON.parse(localStorage.getItem('ug_licenca_validada_offline_v1')||'null');
+     const now=Date.now();
+     if(cached?.user&&cached?.restaurant?.id&&cached?.modules&&cached?.validated_at&&now>=cached.validated_at&&now-cached.validated_at<86400000&&license?.restaurant_id===cached.restaurant.id&&license?.checked_at&&now-license.checked_at<86400000&&now<=new Date(license.expires_at+'T23:59:59').getTime()){
       window.__cbUsuarioLogado=cached.user;window.__cbRestaurante=cached.restaurant;
       window.ugApplyModules?.({user:cached.user,restaurant:cached.restaurant,modules:cached.modules});
-      window.__ugSessaoOffline=true;return;
+      window.__ugSessaoOffline=true;document.getElementById('cbLoginGate')?.remove();return;
      }
     }catch(e){}
-    showLogin('Para iniciar o modo offline, conecte-se à internet e entre uma vez neste aparelho.');
+    showLogin('Modo offline ainda não autorizado neste aparelho. Conecte-se e faça login uma vez.');
     return;
    }
    if(await serverSession())return;
@@ -1879,7 +1883,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
    setTimeout(wait,100);
  }
  window.addEventListener('DOMContentLoaded',start);
- window.cbLogout=async()=>{try{await fetch(API+'?action=logout',{method:'POST',credentials:'same-origin'});}catch(e){} sessionStorage.removeItem(SESSION);location.reload()};
+ window.cbLogout=async()=>{try{await fetch(API+'?action=logout',{method:'POST',credentials:'same-origin'});}catch(e){} sessionStorage.removeItem(SESSION);localStorage.removeItem(OFFLINE_SESSION);location.reload()};
 })();
 </script>
 <script id="comabem-print-routing-v313">
