@@ -167,9 +167,9 @@ def homolog_master_bridge():
     headers = {'Accept': 'application/json'}
     if body is not None:
         headers['Content-Type'] = 'application/json'
-    cookie = request.cookies.get('PHPSESSID', '')
+    cookie = request.cookies.get('COMABEM_APP', '')
     if cookie:
-        headers['Cookie'] = 'PHPSESSID=' + cookie
+        headers['Cookie'] = 'COMABEM_APP=' + cookie
     target = 'https://unigestor-master-teste.onrender.com/licenca/api.php?' + urlencode(params)
     upstream_request = Request(target, data=body, headers=headers, method=request.method)
     try:
@@ -190,14 +190,14 @@ def homolog_master_bridge():
     response = make_response(jsonify(data), status)
     response.headers['Cache-Control'] = 'no-store'
     if set_cookie:
-        # PHP session identifier only; do not forward unrelated upstream cookies.
+        # Forward only the named application session cookie; never the Master admin cookie.
         from http.cookies import SimpleCookie
         parsed = SimpleCookie()
         try:
             parsed.load(set_cookie)
-            session_cookie = parsed.get('PHPSESSID')
+            session_cookie = parsed.get('COMABEM_APP')
             if session_cookie:
-                response.set_cookie('PHPSESSID', session_cookie.value, path='/',
+                response.set_cookie('COMABEM_APP', session_cookie.value, path='/',
                                     secure=True, httponly=True, samesite='Lax')
         except Exception:
             pass
