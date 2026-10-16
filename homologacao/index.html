@@ -1782,7 +1782,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
    }catch(e){}
    return false;
  }
@@ -1851,7 +1851,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      const r=await fetch(API+'?action=login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,senha}),cache:'no-store'});
      const d=await r.json();
      if(!r.ok||!d.ok) throw new Error(d.erro||'Usuário ou senha inválidos.');
-     sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));
+     sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));
      window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); window.ugAtualizarVendasCentrais?.();
      document.getElementById('cbLoginGate')?.remove();
    }catch(e){
@@ -1861,6 +1861,18 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  }
  function isLogged(){try{return !!JSON.parse(sessionStorage.getItem(SESSION)||'null')}catch(e){return false}}
  async function start(){
+   if(!navigator.onLine){
+    try{
+     const cached=JSON.parse(sessionStorage.getItem(SESSION)||'null');
+     if(cached&&cached.user&&cached.restaurant&&cached.modules&&cached.validado_em&&Date.now()>=cached.validado_em&&Date.now()-cached.validado_em<86400000&&window.__ugLicencaOffline){
+      window.__cbUsuarioLogado=cached.user;window.__cbRestaurante=cached.restaurant;
+      window.ugApplyModules?.({user:cached.user,restaurant:cached.restaurant,modules:cached.modules});
+      window.__ugSessaoOffline=true;return;
+     }
+    }catch(e){}
+    showLogin('Para iniciar o modo offline, conecte-se à internet e entre uma vez neste aparelho.');
+    return;
+   }
    if(await serverSession())return;
    if(isLogged()){sessionStorage.removeItem(SESSION);}
    const wait=()=>{const lic=document.getElementById('cbLicenseGate');if(lic){const obs=new MutationObserver(()=>{if(!document.getElementById('cbLicenseGate')){obs.disconnect();showLogin();}});obs.observe(document.body,{childList:true});}else showLogin();};
