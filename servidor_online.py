@@ -139,5 +139,34 @@ def listar_eventos():
     ev=[{'id':r[0],'loja_id':r[1],'dispositivo_id':r[2],'evento_id':r[3],'tipo':r[4],'payload':r[5],'criado_em':r[6].isoformat() if r[6] else None,'recebido_em':r[7].isoformat() if r[7] else None} for r in rows]
     return jsonify({'ok':True,'eventos':ev,'ultimo_id':ev[-1]['id'] if ev else depois})
 
+# License validation is served on the Gestor origin to avoid cross-origin failures.
+# Only the public license-check operation is proxied; no Master credentials are used.
+@app.get('/licenca/api.php')
+def homolog_license_check():
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError, URLError
+    from flask import Response
+    key = (request.args.get('key') or '').strip().upper()
+    if not key or len(key) > 128:
+        return jsonify({'ok': False, 'status': 'SEM_CHAVE'}), 400
+    target = 'https://unigestor-master-teste.onrender.com/licenca/api.php?' + urlencode({'key': key})
+    try:
+        with urlopen(Request(target, headers={'Accept': 'application/json'}), timeout=20) as upstream:
+            payload = upstream.read(16384)
+            status = upstream.status
+    except HTTPError as exc:
+        payload = exc.read(16384)
+        status = exc.code
+    except (URLError, TimeoutError):
+        return jsonify({'ok': False, 'status': 'SERVIDOR_INDISPONIVEL'}), 503
+    try:
+        data = json.loads(payload)
+        if not isinstance(data, dict):
+            raise ValueError('invalid response')
+    except (ValueError, UnicodeDecodeError):
+        return jsonify({'ok': False, 'status': 'RESPOSTA_INVALIDA'}), 502
+    return jsonify(data), status
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=int(os.environ.get('PORT','8080')))
