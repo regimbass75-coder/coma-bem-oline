@@ -139,34 +139,65 @@ def listar_eventos():
     ev=[{'id':r[0],'loja_id':r[1],'dispositivo_id':r[2],'evento_id':r[3],'tipo':r[4],'payload':r[5],'criado_em':r[6].isoformat() if r[6] else None,'recebido_em':r[7].isoformat() if r[7] else None} for r in rows]
     return jsonify({'ok':True,'eventos':ev,'ultimo_id':ev[-1]['id'] if ev else depois})
 
-# License validation is served on the Gestor origin to avoid cross-origin failures.
-# Only the public license-check operation is proxied; no Master credentials are used.
-@app.get('/licenca/api.php')
-def homolog_license_check():
+# Gestor-to-Master bridge for license validation and authenticated user sessions.
+# Restrict upstream operations and forward PHP session cookies on the test origin.
+@app.route('/licenca/api.php', methods=['GET', 'POST'])
+def homolog_master_bridge():
     from urllib.parse import urlencode
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError, URLError
-    from flask import Response
-    key = (request.args.get('key') or '').strip().upper()
-    if not key or len(key) > 128:
+    from flask import make_response
+    action = (request.args.get('action') or '').strip().lower()
+    if action not in ('', 'login', 'me', 'logout'):
+        return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
+    if action in ('login', 'logout') and request.method != 'POST':
+        return jsonify({'ok': False, 'erro': 'Use POST.'}), 405
+    if action in ('', 'me') and request.method != 'GET':
+        return jsonify({'ok': False, 'erro': 'Use GET.'}), 405
+    params = {'action': action} if action else {'key': (request.args.get('key') or '').strip().upper()}
+    if not action and (not params['key'] or len(params['key']) > 128):
         return jsonify({'ok': False, 'status': 'SEM_CHAVE'}), 400
-    target = 'https://unigestor-master-teste.onrender.com/licenca/api.php?' + urlencode({'key': key})
+    body = request.get_data(cache=False) if request.method == 'POST' else None
+    if body and len(body) > 8192:
+        return jsonify({'ok': False, 'erro': 'Requisição muito grande.'}), 413
+    headers = {'Accept': 'application/json'}
+    if body is not None:
+        headers['Content-Type'] = 'application/json'
+    cookie = request.cookies.get('PHPSESSID', '')
+    if cookie:
+        headers['Cookie'] = 'PHPSESSID=' + cookie
+    target = 'https://unigestor-master-teste.onrender.com/licenca/api.php?' + urlencode(params)
+    upstream_request = Request(target, data=body, headers=headers, method=request.method)
     try:
-        with urlopen(Request(target, headers={'Accept': 'application/json'}), timeout=20) as upstream:
-            payload = upstream.read(16384)
-            status = upstream.status
+        with urlopen(upstream_request, timeout=25) as upstream:
+            payload, status = upstream.read(16384), upstream.status
+            set_cookie = upstream.headers.get('Set-Cookie', '')
     except HTTPError as exc:
-        payload = exc.read(16384)
-        status = exc.code
+        payload, status = exc.read(16384), exc.code
+        set_cookie = exc.headers.get('Set-Cookie', '')
     except (URLError, TimeoutError):
-        return jsonify({'ok': False, 'status': 'SERVIDOR_INDISPONIVEL'}), 503
+        return jsonify({'ok': False, 'erro': 'Painel Master indisponível.'}), 503
     try:
         data = json.loads(payload)
         if not isinstance(data, dict):
-            raise ValueError('invalid response')
+            raise ValueError('invalid JSON')
     except (ValueError, UnicodeDecodeError):
-        return jsonify({'ok': False, 'status': 'RESPOSTA_INVALIDA'}), 502
-    return jsonify(data), status
+        return jsonify({'ok': False, 'erro': 'Resposta inválida do Painel Master.'}), 502
+    response = make_response(jsonify(data), status)
+    response.headers['Cache-Control'] = 'no-store'
+    if set_cookie:
+        # PHP session identifier only; do not forward unrelated upstream cookies.
+        from http.cookies import SimpleCookie
+        parsed = SimpleCookie()
+        try:
+            parsed.load(set_cookie)
+            session_cookie = parsed.get('PHPSESSID')
+            if session_cookie:
+                response.set_cookie('PHPSESSID', session_cookie.value, path='/',
+                                    secure=True, httponly=True, samesite='Lax')
+        except Exception:
+            pass
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=int(os.environ.get('PORT','8080')))
