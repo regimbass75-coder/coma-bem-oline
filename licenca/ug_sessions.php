@@ -22,7 +22,9 @@ function ug_session_registry(string $rid, callable $callback) {
 function ug_session_claim(string $rid,string $uid,int $limit):bool {
   $limit=max(1,min(500,$limit));$hash=hash('sha256',session_id());
   return ug_session_registry($rid,function(&$rows,$now)use($uid,$limit,$hash){
-    $rows=array_values(array_filter($rows,fn($r)=>($r['token']??'')!==$hash));
+    // Um novo login autenticado do mesmo usuário substitui sua sessão anterior,
+    // evitando vagas presas após atualização ou fechamento do navegador.
+    $rows=array_values(array_filter($rows,fn($r)=>($r['token']??'')!==$hash && ($r['uid']??'')!==$uid));
     if(count($rows)>=$limit)return false;
     $rows[]=['token'=>$hash,'uid'=>$uid,'expires'=>$now+1800];return true;
   });
