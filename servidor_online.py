@@ -167,7 +167,7 @@ def homolog_master_bridge():
     headers = {'Accept': 'application/json'}
     if body is not None:
         headers['Content-Type'] = 'application/json'
-    cookie = request.cookies.get('COMABEM_APP', '')
+    cookie = request.cookies.get('UG_GESTOR_SESSION', '')
     if cookie:
         headers['Cookie'] = 'COMABEM_APP=' + cookie
     app.logger.warning('bridge action=%s incoming_cookie=%s', action, bool(cookie))
@@ -199,7 +199,7 @@ def homolog_master_bridge():
             parsed.load(set_cookie)
             session_cookie = parsed.get('COMABEM_APP')
             if session_cookie:
-                response.set_cookie('COMABEM_APP', session_cookie.value, path='/',
+                response.set_cookie('UG_GESTOR_SESSION', session_cookie.value, path='/',
                                     secure=True, httponly=True, samesite='Lax')
         except Exception:
             pass
