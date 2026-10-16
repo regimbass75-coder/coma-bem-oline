@@ -521,7 +521,7 @@ body.login-page,
     <div class="uvi-period"><label>DATA INICIAL<input id="uviDataIni" type="date"></label><label>DATA FINAL<input id="uviDataFim" type="date"></label><button class="uvi-primary" onclick="atualizarIndicadoresVendas()">Atualizar indicadores</button></div>
     <div class="uvi-rule"></div>
     <div class="uvi-caixa-head"><b>Caixas considerados</b><button class="uvi-link" onclick="marcarTodosIndicadores(true)">Marcar todos</button></div>
-    <div id="uviCaixas" class="uvi-caixas"></div>
+    <div id="uviCaixas" class="uvi-caixas"></div><div class="uvi-rule"></div><div class="uvi-caixa-head"><b>Usuários considerados</b><button class="uvi-link" onclick="marcarTodosUsuariosIndicadores(true)">Marcar todos</button></div><div id="uviUsuarios" class="uvi-caixas"></div>
   </div>
   <div class="uvi-metrics">
     <div class="uvi-metric"><span>FATURAMENTO</span><strong id="uviFat">R$ 0,00</strong><small id="uviVendas">0 vendas válidas</small></div>
@@ -534,8 +534,7 @@ body.login-page,
     <div class="uvi-panel"><h3>Faturamento por Caixa</h3><div id="uviPorCaixa"></div></div>
     <div class="uvi-panel"><h3>Formas de pagamento</h3><div id="uviPagamentos"></div></div>
   </div>
-  <div class="uvi-two">
-    <div class="uvi-panel"><h3>Origem das vendas</h3><div id="uviOrigem"></div></div>
+  <div class="uvi-two"><div class="uvi-panel"><h3>Faturamento por usuário</h3><div id="uviPorUsuario"></div></div><div class="uvi-panel"><h3>Origem das vendas</h3><div id="uviOrigem"></div></div>
     <div class="uvi-panel"><h3>Produtos mais vendidos</h3><div id="uviProdutos"></div></div>
   </div>
 </div>
@@ -2211,12 +2210,17 @@ document.addEventListener("DOMContentLoaded",function(){
    const xs=caixas();
    b.innerHTML=xs.map((c,i)=>`<label class="uvi-caixa"><input type="checkbox" class="uviCheck" data-id="${esc(c.id||c.numero||i)}" checked><div><b>${esc(c.nome||('Caixa '+String(c.numero||i+1).padStart(3,'0')))}</b><small>${esc(c.ip||c.dispositivo||'PDV local')} ${c.aberto?'<span class="uvi-status">ABERTO</span>':'<span style="color:#a16a00">FECHADO</span>'}</small></div></label>`).join('');
  }
+ function vendedorId(v){return String(v.usuario_id||v.usuario_login||v.usuario_nome||"nao-registrado")}
+ function vendedorNome(v){return String(v.usuario_nome||v.usuario_login||"Não registrado")}
+ function renderUsuariosIndicadores(){const el=document.getElementById("uviUsuarios");if(!el)return;const anteriores=new Map([...el.querySelectorAll(".uviUsuarioCheck")].map(c=>[c.dataset.id,c.checked]));const pessoas=new Map();(typeof vendas!=="undefined"&&Array.isArray(vendas)?vendas:[]).forEach(v=>{const id=vendedorId(v);if(!pessoas.has(id))pessoas.set(id,vendedorNome(v))});el.innerHTML=[...pessoas].sort((a,b)=>a[1].localeCompare(b[1],"pt-BR")).map(([id,nome])=>`<label class="uvi-caixa"><input type="checkbox" class="uviUsuarioCheck" data-id="${esc(id)}" ${anteriores.get(id)===false?"":"checked"}><div><b>${esc(nome)}</b></div></label>`).join("")||'<span class="uvi-empty">Nenhuma venda registrada.</span>';}
+ window.marcarTodosUsuariosIndicadores=function(v){document.querySelectorAll(".uviUsuarioCheck").forEach(x=>x.checked=v);atualizarIndicadoresVendas()};
  window.marcarTodosIndicadores=function(v){document.querySelectorAll('.uviCheck').forEach(x=>x.checked=v);atualizarIndicadoresVendas()};
  function selected(){return new Set([...document.querySelectorAll('.uviCheck:checked')].map(x=>String(x.dataset.id)))}
  function vendaCaixaId(v){return String(v.caixa_id||v.caixaId||v.caixa_numero||v.numero_caixa||v.pdv_id||v.pdv||v.caixa||'01')}
  window.atualizarIndicadoresVendas=function(){
    const ini=document.getElementById('uviDataIni')?.value||today(),fim=document.getElementById('uviDataFim')?.value||today(),sel=selected();
-   const vs=(typeof vendas!=='undefined'&&Array.isArray(vendas)?vendas:[]).filter(v=>{const d=String(v.data||v.criado_em||'').slice(0,10);return (!d||d>=ini&&d<=fim)&&sel.has(vendaCaixaId(v))});
+   const selecionados=new Set([...document.querySelectorAll('.uviUsuarioCheck:checked')].map(x=>x.dataset.id));
+   const vs=(typeof vendas!=='undefined'&&Array.isArray(vendas)?vendas:[]).filter(v=>{const d=String(v.data||v.criado_em||'').slice(0,10);return (!d||d>=ini&&d<=fim)&&sel.has(vendaCaixaId(v))&&selecionados.has(vendedorId(v))});
    const fat=vs.reduce((a,v)=>a+Number(v.total||0),0),desc=vs.reduce((a,v)=>a+Number(v.desconto||v.descontos||0),0),itens=vs.reduce((a,v)=>a+(v.itens||[]).reduce((q,i)=>q+Number(i.qtd||i.quantidade||1),0),0);
    const clientes=new Set(vs.map(v=>v.cliente_id||v.cliente||v.nome_cliente).filter(Boolean));
    const cancel=(()=>{let a=[];try{a=JSON.parse(localStorage.getItem('cb_hom_cancelamentos')||'[]')}catch(e){}return Array.isArray(a)?a.filter(x=>{const d=String(x.data||x.criado_em||'').slice(0,10);return !d||d>=ini&&d<=fim}).length:0})();
@@ -2224,12 +2228,13 @@ document.addEventListener("DOMContentLoaded",function(){
    const byCaixa={};vs.forEach(v=>{let id=vendaCaixaId(v);if(!byCaixa[id])byCaixa[id]={q:0,t:0};byCaixa[id].q++;byCaixa[id].t+=Number(v.total||0)});
    const cx=caixas(),pc=document.getElementById('uviPorCaixa');
    if(pc){const rows=cx.filter(c=>sel.has(String(c.id||c.numero||'01'))).map(c=>{const id=String(c.id||c.numero||'01'),r=byCaixa[id]||{q:0,t:0};return `<div class="uvi-pdvline"><div><b>${esc(c.nome||('Caixa '+id))}</b><br><small>${c.aberto?'<span class="uvi-status">ABERTO</span>':'FECHADO'}</small></div><div>${r.q} venda(s)</div><strong>${money(r.t)}</strong></div>`}).join('');pc.innerHTML=rows||'<div class="uvi-empty">Nenhum caixa selecionado.</div>'}
+   const porUsuario=new Map();vs.forEach(v=>{const id=vendedorId(v);const row=porUsuario.get(id)||{nome:vendedorNome(v),q:0,total:0};row.q++;row.total+=Number(v.total||0);porUsuario.set(id,row)});const pu=document.getElementById('uviPorUsuario');if(pu)pu.innerHTML=[...porUsuario.values()].sort((a,b)=>b.total-a.total).map(x=>`<div class="uvi-pdvline"><b>${esc(x.nome)}</b><span>${x.q} venda(s)</span><strong>${money(x.total)}</strong></div>`).join('')||'<div class="uvi-empty">Sem vendas dos usuários selecionados.</div>';
    const pg={};vs.forEach(v=>(v.pagamentos||[{forma:v.forma||'OUTROS',valor:v.total||0}]).forEach(p=>{let f=String(p.forma||'OUTROS').toUpperCase();pg[f]=(pg[f]||0)+Number(p.valor||0)}));
    const pay=document.getElementById('uviPagamentos');if(pay)pay.innerHTML=Object.keys(pg).length?'<table class="uvi-table"><thead><tr><th>Forma</th><th>Valor</th></tr></thead><tbody>'+Object.entries(pg).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${money(v)}</td></tr>`).join('')+'</tbody></table>':'<div class="uvi-empty">Sem dados no período.</div>';
    const orig={};vs.forEach(v=>{let o=String(v.tipoVenda||v.origem||v.tipo||'PDV').toUpperCase();orig[o]=(orig[o]||0)+Number(v.total||0)});const oe=document.getElementById('uviOrigem');if(oe)oe.innerHTML=Object.keys(orig).length?'<table class="uvi-table"><thead><tr><th>Origem</th><th>Valor</th></tr></thead><tbody>'+Object.entries(orig).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${money(v)}</td></tr>`).join('')+'</tbody></table>':'<div class="uvi-empty">Sem dados no período.</div>';
    const prod={};vs.forEach(v=>(v.itens||[]).forEach(i=>{let n=i.nome||i.produto||'Produto';if(!prod[n])prod[n]={q:0,t:0};prod[n].q+=Number(i.qtd||i.quantidade||1);prod[n].t+=Number(i.preco||i.valor||0)*Number(i.qtd||i.quantidade||1)}));const pe=document.getElementById('uviProdutos');if(pe){const a=Object.values(prod).sort((x,y)=>y.q-x.q).slice(0,10);pe.innerHTML=a.length?'<table class="uvi-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Valor</th></tr></thead><tbody>'+a.map(x=>`<tr><td>${esc(Object.keys(prod).find(k=>prod[k]===x)||'Produto')}</td><td>${x.q}</td><td>${money(x.t)}</td></tr>`).join('')+'</tbody></table>':'<div class="uvi-empty">Sem dados no período.</div>'}
  };
- window.renderIndicadoresVendas=function(){const i=document.getElementById('uviDataIni'),f=document.getElementById('uviDataFim');if(i&&!i.value)i.value=today();if(f&&!f.value)f.value=today();renderCaixas();atualizarIndicadoresVendas()};
+ window.renderIndicadoresVendas=function(){const i=document.getElementById('uviDataIni'),f=document.getElementById('uviDataFim');if(i&&!i.value)i.value=today();if(f&&!f.value)f.value=today();renderCaixas();renderUsuariosIndicadores();atualizarIndicadoresVendas()};
  window.addEventListener('load',()=>setTimeout(renderIndicadoresVendas,100));
 })();
 </script>
