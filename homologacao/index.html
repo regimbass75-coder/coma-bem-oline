@@ -1710,9 +1710,10 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
 (()=>{
  const API='./licenca/api.php';
  const QUEUE='ug_vendas_pendentes_central_v1';
+ const queueKey=()=>QUEUE+'_'+String(window.__cbRestaurante?.id||'sem_empresa');
  let loading=false, busy=false, currentRestaurant='';
- function pending(){try{const q=JSON.parse(localStorage.getItem(QUEUE)||'[]');return Array.isArray(q)?q:[]}catch(e){return []}}
- function savePending(q){localStorage.setItem(QUEUE,JSON.stringify(q))}
+ function pending(){try{const q=JSON.parse(localStorage.getItem(queueKey())||'[]');return Array.isArray(q)?q:[]}catch(e){return []}}
+ function savePending(q){localStorage.setItem(queueKey(),JSON.stringify(q))}
  async function request(action,data){
    const opt={credentials:'same-origin',cache:'no-store'};
    if(data){opt.method='POST';opt.headers={'Content-Type':'application/json'};opt.body=JSON.stringify(data)}
