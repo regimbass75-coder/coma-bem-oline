@@ -24,6 +24,25 @@ try {
   if (preg_match('~(^|/)(backups|\.git|node_modules|vendor)(/|$)~i',$rel) || preg_match('~(^|/)(\.env(?:\..*)?|\.ug_update\.lock)$~i',$rel)) continue;
   if (!$zip->addFile($full,$rel)) throw new RuntimeException('Falha ao adicionar arquivo.');
  }
+ // Incluir os dados persistentes do Painel Master, fora da raiz publica.
+ // Nao incluir sessoes, backups temporarios, travas ou links simbolicos.
+ $dataRoot=realpath(DATA_DIR);
+ if ($dataRoot===false || !is_dir($dataRoot) || !is_readable($dataRoot)) throw new RuntimeException('Dados persistentes indisponiveis.');
+ $required=['admin.json','licenses.json','restaurants.json','users.json','finance.json'];
+ foreach ($required as $filename) {
+  $source=$dataRoot.'/'.$filename;
+  if (is_link($source)) throw new RuntimeException('Arquivo de dados inesperado: '.$filename);
+  if (is_file($source) && !is_readable($source)) throw new RuntimeException('Arquivo de dados sem leitura: '.$filename);
+ }
+ $dataIt=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dataRoot,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::LEAVES_ONLY);
+ foreach ($dataIt as $file) {
+  if (!$file->isFile() || $file->isLink()) continue;
+  $full=$file->getPathname();
+  $rel=str_replace('\\\\','/',substr($full,strlen($dataRoot)+1));
+  if (preg_match('~(^|/)(app-php-sessions|sessions|backups|\\.ug_private_backups_[^/]*|\\.git)(/|$)~i',$rel)) continue;
+  if (preg_match('~(^|/)(\\.env(?:\\..*)?|\\.master\\.lock|\\.ug_update\\.lock|[^/]+\\.(?:lock|tmp|rollback))$~i',$rel)) continue;
+  if (!$zip->addFile($full,'dados_persistentes/'.$rel)) throw new RuntimeException('Falha ao adicionar dados persistentes.');
+ }
  if (!$zip->close()) throw new RuntimeException('Falha ao concluir backup.');
  clearstatcache(true,$path);
  if (!is_file($path) || filesize($path)<22) throw new RuntimeException('Backup vazio.');
