@@ -1613,6 +1613,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
        const group=document.getElementById(id);if(!group)continue;
        const show=Array.from(group.querySelectorAll('[data-v]')).some(x=>permitted(x.dataset.v));
        if(!show){group.hidden=true;group.style.setProperty('display','none','important')}
+       else{group.hidden=false;group.style.removeProperty('display')}
        const header=group.previousElementSibling;
        if(header && header.tagName==='BUTTON'){header.hidden=!show;header.style.setProperty('display',show?'':'none',show?'':'important')}
      }
