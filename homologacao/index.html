@@ -1170,8 +1170,15 @@ function resumoCaixa(){
  return {vs,dinheiro,pix,cartao,total,sangria,suprimento};
 }
 function usuarioAtualCaixa(){
- const u=window.__cbUsuarioLogado;
- return u&&u.id?{usuario_id:String(u.id),usuario_nome:String(u.name||u.login||'Não identificado'),usuario_login:String(u.login||'')}:{usuario_id:null,usuario_nome:'Não identificado',usuario_login:''};
+ let u=window.__cbUsuarioLogado;
+ if(!u || !(u.name||u.login)){
+   try{
+     const key=Object.keys(sessionStorage).find(k=>k.includes('cb_app_session')||k.includes('cb_ug_sessao'));
+     const saved=key?JSON.parse(sessionStorage.getItem(key)||'null'):null;
+     if(saved && (saved.nome||saved.login))u={id:saved.id||null,name:saved.nome||saved.login,login:saved.login};
+   }catch(e){}
+ }
+ return u&&(u.name||u.login)?{usuario_id:u.id?String(u.id):null,usuario_nome:String(u.name||u.login),usuario_login:String(u.login||'')}:{usuario_id:null,usuario_nome:'Não registrado',usuario_login:''};
 }
 function textoSeguroCaixa(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function abrirCaixa(){
