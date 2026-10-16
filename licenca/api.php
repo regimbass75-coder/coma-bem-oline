@@ -90,6 +90,58 @@ if($action==='me'){
     'restaurant'=>['id'=>$_SESSION['restaurant_id'],'name'=>$lic['establishment']??''],
     'license'=>['status'=>'ATIVA','expires_at'=>$lic['expires_at']??null,'days_left'=>days_left($lic),'version'=>$lic['version']??null]]);
 }
+// Backup individual de vendas da empresa autenticada.
+// O backup administrativo geral permanece exclusivo do Painel Master.
+if($action==='company_backup'){
+  if($_SERVER['REQUEST_METHOD']!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  start_app();
+  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $actor=ug_user_by_session();
+  $rid=(string)($_SESSION['restaurant_id']??'');
+  if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+  if(!in_array((string)($actor['role']??''),['ADMINISTRADOR','GERENTE'],true))
+    outj(['ok'=>false,'erro'=>'Somente administrador ou gerente pode baixar backup.'],403);
+  $lic=license_for_restaurant($rid);
+  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+  if(!class_exists('ZipArchive'))outj(['ok'=>false,'erro'=>'Serviço de backup indisponível.'],503);
+  $salesFile=DATA_DIR.'/empresa-vendas/'.hash('sha256',$rid).'.json';
+  $sales=[];
+  if(is_file($salesFile)){
+    $fp=@fopen($salesFile,'rb');
+    if(!$fp)outj(['ok'=>false,'erro'=>'Leitura de vendas indisponível.'],503);
+    try{
+      if(!flock($fp,LOCK_SH))throw new RuntimeException('lock');
+      $raw=stream_get_contents($fp);
+      $sales=json_decode($raw,true);
+      if(!is_array($sales)||!array_is_list($sales))throw new RuntimeException('invalid sales');
+    }catch(Throwable $e){fclose($fp);outj(['ok'=>false,'erro'=>'Não foi possível ler as vendas.'],503);}
+    fclose($fp);
+  }
+  $users=[];
+  foreach(read_json(USERS_FILE,[]) as $u)if((string)($u['restaurant_id']??'')===$rid)
+    $users[]=['id'=>$u['id']??null,'name'=>$u['name']??'','login'=>$u['login']??'','role'=>$u['role']??'USUARIO','active'=>$u['active']??true];
+  $manifest=['format'=>'unigestor-company-backup-v1','restaurant_id'=>$rid,'created_at'=>date('c'),
+    'contents'=>['sales','users_metadata'],'note'=>'Backup individual: vendas centrais e identificacao de usuarios; demais modulos ainda nao centralizados.'];
+  $temp=tempnam(sys_get_temp_dir(),'ug_company_');
+  if($temp===false)outj(['ok'=>false,'erro'=>'Backup indisponível.'],503);
+  $zip=new ZipArchive();
+  try{
+    if($zip->open($temp,ZipArchive::OVERWRITE)!==true)throw new RuntimeException('zip');
+    foreach(['manifest.json'=>$manifest,'vendas.json'=>$sales,'usuarios.json'=>$users] as $name=>$value){
+      $json=json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+      if(!$zip->addFromString($name,$json))throw new RuntimeException('zip file');
+    }
+    if(!$zip->close())throw new RuntimeException('zip close');
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="UniGestor-empresa-'.substr(hash('sha256',$rid),0,12).'-'.date('Ymd-His').'.zip"');
+    header('Content-Length: '.filesize($temp));
+    header('Cache-Control: no-store, private');
+    readfile($temp);
+  }catch(Throwable $e){error_log('company_backup: '.$e->getMessage());if(!headers_sent())http_response_code(503);}
+  finally{@unlink($temp);}
+  exit;
+}
 // Registro central de vendas: um arquivo independente por empresa, com trava
 // exclusiva e identificador idempotente. Nunca aceita restaurant_id do navegador.
 if(in_array($action,['sales_list','sales_create'],true)){
