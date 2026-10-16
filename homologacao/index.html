@@ -1527,6 +1527,52 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  window.addEventListener('DOMContentLoaded',()=>check(localStorage.getItem(STORE)||''));setInterval(refreshLicense,300000);
 })();
 </script>
+<script id="unigestor-permissoes-homologacao">
+(()=>{
+ const sectionModules={
+ 'INÍCIO':['Relatórios'],'VENDA_CONSULTA':['PDV/Vendas'],'VENDA_PROMOCOES':['PDV/Vendas'],'VENDA_ACOMPANHAMENTO':['PDV/Vendas'],'VENDA_INDICADORES':['Relatórios'],'VENDA_CAIXA_FUNCOES':['Caixa'],'VENDA_ORCAMENTOS':['PDV/Vendas'],'VENDA_ORDENS_SERVICO':['PDV/Vendas'],
+ 'VENDA_EXTERNA':['Venda Externa'],'PDV':['PDV/Vendas'],'MESAS':['Mesas'],'COMANDAS':['Comandas'],'PEDIDOS':['Pedidos'],'COZINHA':['Cozinha/KDS'],'RETIRADA':['Pedidos','Delivery'],
+ 'CAIXA':['Caixa'],'FINANCEIRO':['Financeiro'],'CONTAS':['Financeiro'],'RELATÓRIOS':['Relatórios'],
+ 'CADASTROS':['Clientes'],'ESTOQUE':['Produtos','Estoque'],'USUARIOS':['Usuários/Permissões'],'COMISSOES':['Comissões'],
+ 'GARCOM':['Garçom Mobile'],'DELIVERY':['Delivery'],'PRODUCAO':['Cozinha/KDS'],'CARDAPIO':['Produtos'],
+ 'PROPRIETARIO':['Relatórios'],'HISTORICO':['Relatórios'],'FECHAMENTO':['Caixa'],'AUDITORIA':['Configurações'],'CANCELAMENTOS':['PDV/Vendas'],
+ 'CONFIG':['Configurações'],'PROPAGANDA':['Configurações'],'IMPRESSAO':['Configurações'],'PAGAMENTOS':['Configurações'],'SINCRONIZACAO':['Configurações'],'BACKUP':['Configurações'],'ATUALIZAR':['Configurações']
+ };
+ let allowed=null;
+ const permitted=id=>allowed!==null && (sectionModules[id]||[]).some(m=>allowed.has(m));
+ function enforce(){
+   if(allowed===null)return;
+   document.querySelectorAll('nav [data-v]').forEach(el=>{el.hidden=!permitted(el.dataset.v);el.style.display=permitted(el.dataset.v)?'':'none'});
+   const menuGroups={menuVenda:['VENDA_CONSULTA','VENDA_PROMOCOES','VENDA_ACOMPANHAMENTO','VENDA_INDICADORES','VENDA_CAIXA_FUNCOES','VENDA_ORCAMENTOS','VENDA_ORDENS_SERVICO'],
+     atendMenu:['MESAS','COMANDAS','PEDIDOS','COZINHA','RETIRADA'],finMenu:['CAIXA','FINANCEIRO','CONTAS','RELATÓRIOS'],
+     cadMenu:['CADASTROS','ESTOQUE','USUARIOS','COMISSOES'],opMenu:['GARCOM','DELIVERY','PRODUCAO','CARDAPIO'],
+     gestMenu:['PROPRIETARIO','CONTAS','HISTORICO','FECHAMENTO','AUDITORIA','CANCELAMENTOS'],
+     cfgMenu:['CONFIG','PROPAGANDA','IMPRESSAO','PAGAMENTOS','SINCRONIZACAO','BACKUP','ATUALIZAR']};
+   for(const [id,items] of Object.entries(menuGroups)){
+     const el=document.getElementById(id);if(!el)continue;
+     const show=items.some(permitted);el.hidden=!show;el.style.display=show?'':'none';
+     const toggle=el.previousElementSibling;
+     if(toggle && toggle.matches('button.menu-group')){toggle.hidden=!show;toggle.style.display=show?'':'none'}
+   }
+   const first=document.querySelector('nav [data-v]:not([hidden])');
+   const visible=document.querySelector('main section:not(.hide)');
+   if(visible && !permitted(visible.id) && first)first.click();
+ }
+ window.ugApplyModules=function(data){
+   const mods=data&&data.modules;
+   if(!mods||!Array.isArray(mods.effective_modules)){allowed=new Set();}else{allowed=new Set(mods.effective_modules)}
+   enforce();
+ };
+ document.addEventListener('click',e=>{
+   const target=e.target.closest('[data-v]');
+   if(target && !permitted(target.dataset.v)){
+     e.preventDefault();e.stopImmediatePropagation();
+     alert('Este módulo não foi liberado no Painel Master.');
+   }
+ },true);
+ window.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('nav [data-v]').forEach(el=>el.style.display='none');});
+})();
+</script>
 <script id="comabem-login-gate-v334">
 (()=>{
  const SESSION='comabem_session_user';
@@ -1534,7 +1580,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);return true;}
    }catch(e){}
    return false;
  }
@@ -1604,7 +1650,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      const d=await r.json();
      if(!r.ok||!d.ok) throw new Error(d.erro||'Usuário ou senha inválidos.');
      sessionStorage.setItem(SESSION,JSON.stringify({login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString()}));
-     window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant;
+     window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d);
      document.getElementById('cbLoginGate')?.remove();
    }catch(e){
      if(m)m.textContent=e.message||'Não foi possível entrar.';
