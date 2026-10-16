@@ -90,6 +90,74 @@ if($action==='me'){
     'restaurant'=>['id'=>$_SESSION['restaurant_id'],'name'=>$lic['establishment']??''],
     'license'=>['status'=>'ATIVA','expires_at'=>$lic['expires_at']??null,'days_left'=>days_left($lic),'version'=>$lic['version']??null]]);
 }
+// Gestão de funcionários restrita ao administrador/gerente da própria empresa.
+if(in_array($action,['users_list','users_create','users_update'],true)){
+  start_app();
+  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $actor=ug_user_by_session();
+  $rid=(string)($_SESSION['restaurant_id']??'');
+  if(!$actor||!ug_restaurant_is_active($rid)||!in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true)
+    ||!in_array('Usuários/Permissões',ug_effective_permissions($actor),true))
+    outj(['ok'=>false,'erro'=>'Sem permissão para administrar usuários.'],403);
+  $lic=license_for_restaurant($rid);
+  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+  $users=read_json(USERS_FILE,[]);
+  if($action==='users_list'){
+    if($_SERVER['REQUEST_METHOD']!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+    $list=[];
+    foreach($users as $u)if(($u['restaurant_id']??'')===$rid)$list[]=[
+      'id'=>$u['id'],'name'=>$u['name'],'login'=>$u['login'],'role'=>$u['role']??'USUARIO',
+      'active'=>($u['active']??true)===true,'permissions'=>ug_user_permissions($u)];
+    outj(['ok'=>true,'users'=>$list,'modules'=>ug_company_modules($rid)]);
+  }
+  if($_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  $input=json_decode(file_get_contents('php://input'),true);
+  if(!is_array($input))outj(['ok'=>false,'erro'=>'JSON inválido.'],400);
+  $name=trim((string)($input['name']??''));
+  $role=strtoupper(trim((string)($input['role']??'USUARIO')));
+  if(!in_array($role,['ADMINISTRADOR','GERENTE','VENDEDOR','GARCOM','CAIXA','USUARIO'],true))
+    outj(['ok'=>false,'erro'=>'Perfil inválido.'],400);
+  if($role==='ADMINISTRADOR'&&($actor['role']??'')!=='ADMINISTRADOR')
+    outj(['ok'=>false,'erro'=>'Somente administrador pode definir outro administrador.'],403);
+  $requested=$input['permissions']??[];
+  if(!is_array($requested)||!array_is_list($requested))outj(['ok'=>false,'erro'=>'Permissões inválidas.'],400);
+  $perms=ug_valid_modules($requested);
+  if(count($perms)!==count(array_unique($requested))||array_diff($perms,ug_company_modules($rid)))
+    outj(['ok'=>false,'erro'=>'Selecione apenas módulos contratados.'],400);
+  if($name===''||mb_strlen($name)>120)outj(['ok'=>false,'erro'=>'Nome inválido.'],400);
+  if($action==='users_create'){
+    $login=trim((string)($input['login']??''));
+    $password=(string)($input['password']??'');
+    if(!preg_match('/^[a-zA-Z0-9_.@-]{3,80}$/',$login)||strlen($password)<8)
+      outj(['ok'=>false,'erro'=>'Login inválido ou senha menor que 8 caracteres.'],400);
+    foreach($users as $u)if(strcasecmp(trim((string)($u['login']??'')),$login)===0)
+      outj(['ok'=>false,'erro'=>'Login já cadastrado.'],409);
+    $users[]=['id'=>'USR-'.strtoupper(bin2hex(random_bytes(5))),'restaurant_id'=>$rid,
+      'name'=>$name,'login'=>$login,'password_hash'=>password_hash($password,PASSWORD_DEFAULT),
+      'role'=>$role,'active'=>true,'created_at'=>date('c'),'permissions'=>$perms];
+  }else{
+    $id=(string)($input['id']??'');$found=false;
+    foreach($users as &$u){
+      if(($u['id']??'')!==$id||($u['restaurant_id']??'')!==$rid)continue;
+      if(($u['role']??'')==='ADMINISTRADOR'&&($actor['role']??'')!=='ADMINISTRADOR')
+        outj(['ok'=>false,'erro'=>'Gerente não pode editar administrador.'],403);
+      if($id===(string)$actor['id']&&(!($input['active']??true)||$role!=='ADMINISTRADOR'&&$actor['role']==='ADMINISTRADOR'))
+        outj(['ok'=>false,'erro'=>'Não é permitido desativar ou rebaixar sua própria conta.'],400);
+      $u['name']=$name;$u['role']=$role;$u['permissions']=$perms;
+      $u['active']=($input['active']??true)===true;
+      if(!empty($input['password'])){
+        if(strlen((string)$input['password'])<8)outj(['ok'=>false,'erro'=>'Senha menor que 8 caracteres.'],400);
+        $u['password_hash']=password_hash((string)$input['password'],PASSWORD_DEFAULT);
+      }
+      $found=true;break;
+    }
+    unset($u);
+    if(!$found)outj(['ok'=>false,'erro'=>'Usuário não encontrado nesta empresa.'],404);
+  }
+  write_json(USERS_FILE,$users);
+  outj(['ok'=>true,'message'=>'Usuário salvo com sucesso.']);
+}
 if($action==='logout'){
   if($_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Use POST para sair.'],405);
   start_app();ug_end_session();outj(['ok'=>true]);
