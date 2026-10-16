@@ -1569,6 +1569,24 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
        btn.hidden=!show;btn.style.display=show?'':'none';
      }
    });
+   // Cada título só aparece se houver ao menos um botão autorizado dentro dele.
+   const venda=document.getElementById('menuVenda');
+   if(venda){
+     const show=Array.from(venda.querySelectorAll('[data-v]')).some(el=>permitted(el.dataset.v));
+     venda.hidden=!show;venda.style.setProperty('display',show?'block':'none','important');
+   }
+   document.querySelectorAll('nav button.menu-group').forEach(btn=>{
+     if(btn.closest('#menuVenda'))return;
+     const next=btn.nextElementSibling;
+     if(!next || !next.querySelectorAll)return;
+     const show=Array.from(next.querySelectorAll('[data-v]')).some(el=>permitted(el.dataset.v));
+     btn.hidden=!show;btn.style.setProperty('display',show?'flex':'none','important');
+     if(next.classList.contains('submenu')){
+       next.hidden=!show;
+       if(!show)next.style.setProperty('display','none','important');
+       else next.style.removeProperty('display');
+     }
+   });
    const first=Array.from(document.querySelectorAll('nav [data-v]')).find(el=>permitted(el.dataset.v));
    const visible=document.querySelector('main section:not(.hide)');
    if(visible && !permitted(visible.id) && first)first.click();
