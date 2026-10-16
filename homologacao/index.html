@@ -585,7 +585,7 @@ body.login-page,
 <div class="card"><b>Sangrias</b><p class="cb-rc-total" id="cxTotalSangria">R$ 0,00</p></div>
 <div class="card"><b>Suprimentos</b><p class="cb-rc-total" id="cxTotalSuprimento">R$ 0,00</p></div>
 </div></div>
-<div class="panel"><h3>Movimentos do caixa</h3><table><thead><tr><th>Hora</th><th>Tipo</th><th>Valor</th><th>Observação</th></tr></thead><tbody id="cxLista"></tbody></table></div>
+<div class="panel"><h3>Movimentos do caixa</h3><table><thead><tr><th>Hora</th><th>Tipo</th><th>Usuário</th><th>Valor</th><th>Observação</th></tr></thead><tbody id="cxLista"></tbody></table></div>
 </section><section id="ESTOQUE" class="hide"><div class="panel"><h2>Produtos / Estoque</h2><p class="muted">Cadastro, saldo, estoque mínimo, localização, margem e movimentações.</p><div class="grid"><div class="card"><b>Itens cadastrados</b><p class="cb-rc-total" id="estResumoItens">0</p></div><div class="card"><b>Estoque baixo</b><p class="cb-rc-total" id="estResumoBaixo">0</p></div><div class="card"><b>Custo em estoque</b><p class="cb-rc-total" id="estResumoCusto">R$ 0,00</p></div><div class="card"><b>Venda potencial</b><p class="cb-rc-total" id="estResumoVenda">R$ 0,00</p></div></div></div><div class="panel"><h3>Cadastro do produto</h3><div class="formrow"><input id="estCodigo" class="inp" placeholder="Código interno"><input id="estBarras" class="inp" placeholder="Código de barras"><input id="estNome" class="inp" placeholder="Produto"><input id="estGrupo" class="inp" list="listaGrupos" placeholder="Grupo"><datalist id="listaGrupos"></datalist><input id="estFornecedor" class="inp" placeholder="Fornecedor"><input id="estCusto" class="inp" type="number" step="0.01" placeholder="Preço de custo"><input id="estMedio" class="inp" type="number" step="0.01" placeholder="Preço médio"><input id="estPreco" class="inp" type="number" step="0.01" placeholder="Preço de venda"><input id="estQtd" class="inp" type="number" step="0.001" placeholder="Estoque inicial / entrada"><input id="estMin" class="inp" type="number" step="0.001" placeholder="Estoque mínimo"><input id="estLocal" class="inp" placeholder="Localização / prateleira"><select id="estUnidade" class="inp"><option value="UN">UN • Unidade</option><option value="KG">KG • Quilo</option><option value="CX">CX • Caixa</option><option value="PCT">PCT • Pacote</option><option value="LT">LT • Litro</option><option value="G">G • Grama</option></select><button class="btn gold" onclick="novoProduto()">CADASTRAR / ATUALIZAR</button></div></div><div class="panel"><h3>Entrada / Saída / Ajuste</h3><div class="formrow"><select id="movProduto" class="inp"></select><select id="movTipo" class="inp"><option>ENTRADA</option><option>SAÍDA</option><option>AJUSTE</option></select><input id="movQtd" class="inp" type="number" step="0.001" placeholder="Quantidade"><input id="movObs" class="inp" placeholder="Motivo / observação"><button class="btn green" onclick="movimentarEstoque()">LANÇAR MOVIMENTO</button></div></div><div class="panel"><h3>Grupos e consulta</h3><div class="formrow"><input id="grupoNome" class="inp" placeholder="Nome do grupo"><button class="btn gold" onclick="novoGrupo()">CADASTRAR GRUPO</button><input id="estBusca" class="inp" placeholder="Buscar código, barras, produto, grupo ou fornecedor" oninput="renderEstoque()"></div><p class="muted" id="grupoLista"></p></div><div class="panel" style="overflow:auto"><table><thead><tr><th>Código</th><th>Barras</th><th>Produto</th><th>Grupo</th><th>Fornecedor</th><th>Custo</th><th>Médio</th><th>Venda</th><th>Margem</th><th>Un.</th><th>Estoque</th><th>Mín.</th><th>Local</th><th>Status</th><th>Ação</th></tr></thead><tbody id="estLista"></tbody></table></div><div class="panel"><h3>Últimas movimentações</h3><table><thead><tr><th>Data</th><th>Produto</th><th>Tipo</th><th>Qtd.</th><th>Observação</th></tr></thead><tbody id="movLista"></tbody></table></div></section><section id="FINANCEIRO" class="hide"><div class="panel"><h2>Financeiro</h2><div class="grid"><div class="card"><b>Vendas recebidas</b><p class="cb-rc-total" id="finTotal">R$ 0,00</p></div><div class="card"><b>Dinheiro</b><p id="finDin">R$ 0,00</p></div><div class="card"><b>Pix</b><p id="finPix">R$ 0,00</p></div><div class="card"><b>Cartão</b><p id="finCart">R$ 0,00</p></div></div></div><div class="panel" style="border:2px solid #2f6fed;background:#f8fbff">
 <h3>📋 CONTAS A PAGAR E A RECEBER</h3>
 <div class="grid">
@@ -888,12 +888,13 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(e&&e.qtd<i.qtd)retur
  venda.clienteId=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?Number(clienteVendaIdx):null;
  venda.cliente=creditoPag>0&&clienteCreditoIdx!==""?clientes[Number(clienteCreditoIdx)].nome:"";venda.clienteId=creditoPag>0&&clienteCreditoIdx!==""?Number(clienteCreditoIdx):null;
  if(creditoPag>0){let cc=clientes[Number(clienteCreditoIdx)];cc.creditoUsado=creditoCliente(cc)+creditoPag;contas.unshift({tipo:"RECEBER",descricao:"Crédito da loja - "+cc.nome+" - "+vendaId,cliente:cc.nome,clienteId:Number(clienteCreditoIdx),valor:creditoPag,vencimento:new Date().toISOString().slice(0,10),status:"ABERTA",vendaId:vendaId,criado_em:new Date().toISOString()});}
+ Object.assign(venda,usuarioAtualCaixa());
  vendas.unshift(venda);
  let outros=pags.filter(p=>p.forma!=="DINHEIRO").reduce((s,p)=>s+Number(p.valor||0),0),
  dinRecebido=pags.filter(p=>p.forma==="DINHEIRO").reduce((s,p)=>s+Number(p.valor||0),0),
  dinDevido=Math.max(0,total-outros),troco=Math.max(0,dinRecebido-dinDevido);
- pags.filter(p=>p.forma!=="DINHEIRO"&&p.forma!=="CREDITO_LOJA").forEach(p=>caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"VENDA "+p.forma,valor:p.valor,obs:"PDV Balcão"}));
- if(dinRecebido>0)caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"VENDA DINHEIRO",valor:dinRecebido-troco,obs:"PDV Balcão"+(troco>0?" • troco "+moeda(troco):"")});
+ pags.filter(p=>p.forma!=="DINHEIRO"&&p.forma!=="CREDITO_LOJA").forEach(p=>caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"VENDA "+p.forma,valor:p.valor,obs:"PDV Balcão",...usuarioAtualCaixa()}));
+ if(dinRecebido>0)caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"VENDA DINHEIRO",valor:dinRecebido-troco,obs:"PDV Balcão"+(troco>0?" • troco "+moeda(troco):""),...usuarioAtualCaixa()});
  if(tipoVenda==="COMANDA"&&comandaVenda){
    let cFinal=comandas.find(c=>String(c.numero)===String(comandaVenda));
    if(cFinal){cFinal.status="LIVRE";cFinal.itens=[];cFinal.total=0;cFinal.cliente="";cFinal.fechada_em=new Date().toISOString();}
@@ -1169,6 +1170,11 @@ function resumoCaixa(){
  let suprimento=caixa.movs.filter(m=>m.tipo==="SUPRIMENTO").reduce((s,m)=>s+Number(m.valor||0),0);
  return {vs,dinheiro,pix,cartao,total,sangria,suprimento};
 }
+function usuarioAtualCaixa(){
+ const u=window.__cbUsuarioLogado;
+ return u&&u.id?{usuario_id:String(u.id),usuario_nome:String(u.name||u.login||'Não identificado'),usuario_login:String(u.login||'')}:{usuario_id:null,usuario_nome:'Não identificado',usuario_login:''};
+}
+function textoSeguroCaixa(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function abrirCaixa(){
  if(caixa.aberto)return alert("O caixa já está aberto.");
  let v=parseFloat(prompt("Valor inicial do caixa:","0")||0);
@@ -1180,7 +1186,7 @@ function movCaixa(tipo){
  if(!caixa.aberto)return alert("Abra o caixa primeiro.");
  let v=parseFloat(document.getElementById("cxValor").value||0),o=document.getElementById("cxObs").value.trim();
  if(!(v>0))return alert("Informe o valor.");
- caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo,valor:v,obs:o});
+ caixa.movs.unshift({hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo,valor:v,obs:o,...usuarioAtualCaixa()});
  fila.push({id:"CAIXA-"+Date.now()+"-"+Math.random().toString(16).slice(2),tipo:"MOVIMENTO_CAIXA",criado_em:new Date().toISOString(),total:v,forma:tipo,pagamentos:[],itens:[],payload:{movimento:tipo,valor:v,observacao:o}});
  document.getElementById("cxValor").value="";document.getElementById("cxObs").value="";
  auditar(tipo,tipo==="SANGRIA"?"Sangria "+moeda(v):"Suprimento "+moeda(v));
@@ -1211,6 +1217,7 @@ function relatorioCaixaHtml(){
    let venda=pg[f]||0;
    let noCaixa=f==="DINHEIRO"?venda:0; return '<tr><td>'+f+'</td><td style="text-align:right">'+moeda(venda)+'</td><td style="text-align:right">'+moeda(noCaixa)+'</td><td style="text-align:right">'+moeda(venda)+'</td></tr>';
  }).join("");
+ let movimentosDetalhados=(caixa.movs||[]).map(m=>'<tr><td>'+textoSeguroCaixa(m.hora)+'</td><td>'+textoSeguroCaixa(m.tipo)+'</td><td>'+textoSeguroCaixa(m.usuario_nome||'Não registrado')+'</td><td style="text-align:right">'+moeda(m.valor)+'</td></tr>').join('');
  let qtd=r.vs.length;
  let acrescimos=0,descontos=0,totalGeral=r.total;
 
@@ -1235,7 +1242,8 @@ function relatorioCaixaHtml(){
  '<div class="rc-row"><span>Acréscimos:</span><b>'+moeda(acrescimos)+'</b></div>'+
  '<div class="rc-row"><span>Descontos:</span><b>'+moeda(descontos)+'</b></div>'+
  '<div class="rc-row"><span><b>Total de Geral:</b></span><b>'+moeda(totalGeral)+'</b></div>'+
- '<div class="rc-row"><span><b>Quantidade:</b></span><b>'+qtd+'</b></div>'+
+ '<div class="rc-row"><span><b>Quantidade:</b></span><b>'+qtd+'</b></div>'+ 
+ '<div class="rc-line"></div><b>Movimentações por usuário</b><table style="width:100%;font-size:10px;border-collapse:collapse"><thead><tr><th>Hora</th><th>Tipo</th><th>Usuário</th><th>Valor</th></tr></thead><tbody>'+ (movimentosDetalhados||'<tr><td colspan="4">Nenhum movimento.</td></tr>')+'</tbody></table>'+
  '<div style="margin-top:34px;text-align:center"><div style="border-top:1px solid #222;width:82%;margin:0 auto 8px"></div><b>Assinatura</b></div>'+
  '</div>';
 }
@@ -1264,7 +1272,7 @@ function renderCaixa(){
  let x=resumoCaixa();
  r.innerHTML=caixa.aberto?'<p><span class="badge entregue">CAIXA ABERTO</span></p><p class="cb-rc-total">'+moeda(saldoCaixa())+'</p><button class="btn red" onclick="fecharCaixa()">FECHAR CAIXA</button>':'<p><span class="badge aberta">CAIXA FECHADO</span></p><button class="btn green" onclick="abrirCaixa()">ABRIR CAIXA</button>';
  let mov=caixa.movs||[];
- l.innerHTML=mov.length?mov.map(m=>'<tr><td>'+m.hora+'</td><td>'+m.tipo+'</td><td>'+moeda(m.valor)+'</td><td>'+(m.obs||"-")+'</td></tr>').join(""):'<tr><td colspan="4">Nenhum movimento.</td></tr>';
+ l.innerHTML=mov.length?mov.map(m=>'<tr><td>'+textoSeguroCaixa(m.hora)+'</td><td>'+textoSeguroCaixa(m.tipo)+'</td><td>'+textoSeguroCaixa(m.usuario_nome||'Não registrado')+'</td><td>'+moeda(m.valor)+'</td><td>'+textoSeguroCaixa(m.obs||'-')+'</td></tr>').join(''):'<tr><td colspan="5">Nenhum movimento.</td></tr>';
  [["cxTotalVendas",x.total],["cxTotalDinheiro",x.dinheiro],["cxTotalPix",x.pix],["cxTotalCartao",x.cartao],["cxTotalSangria",x.sangria],["cxTotalSuprimento",x.suprimento]].forEach(a=>{let e=document.getElementById(a[0]);if(e)e.textContent=moeda(a[1])});
 }
 function novaConta(){let tipo=document.getElementById("contaTipo").value,desc=document.getElementById("contaDesc").value.trim(),valor=parseFloat(document.getElementById("contaValor").value||0),venc=document.getElementById("contaVenc").value;if(!desc||!(valor>0))return alert("Informe descrição e valor.");contas.unshift({tipo,desc,valor,venc,status:"ABERTA"});["contaDesc","contaValor","contaVenc"].forEach(id=>document.getElementById(id).value="");salvar()}function quitarConta(i){if(!contas[i]||contas[i].status==="QUITADA")return;if(confirm("Marcar esta conta como quitada?")){contas[i].status="QUITADA";salvar()}}function abrirContasFinanceiro(tipo){
