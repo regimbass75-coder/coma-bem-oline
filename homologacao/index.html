@@ -1530,12 +1530,12 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
 <script id="unigestor-permissoes-homologacao">
 (()=>{
  const sectionModules={
- 'INÍCIO':['Relatórios'],'VENDA_CONSULTA':['PDV/Vendas'],'VENDA_PROMOCOES':['PDV/Vendas'],'VENDA_ACOMPANHAMENTO':['PDV/Vendas'],'VENDA_INDICADORES':['Relatórios'],'VENDA_CAIXA_FUNCOES':['Caixa'],'VENDA_ORCAMENTOS':['PDV/Vendas'],'VENDA_ORDENS_SERVICO':['PDV/Vendas'],
+ 'INÍCIO':['Relatórios'],'VENDA_CONSULTA':[],'VENDA_PROMOCOES':[],'VENDA_ACOMPANHAMENTO':[],'VENDA_INDICADORES':['Relatórios'],'VENDA_CAIXA_FUNCOES':['Caixa'],'VENDA_ORCAMENTOS':[],'VENDA_ORDENS_SERVICO':[],
  'VENDA_EXTERNA':['Venda Externa'],'PDV':['PDV/Vendas'],'MESAS':['Mesas'],'COMANDAS':['Comandas'],'PEDIDOS':['Pedidos'],'COZINHA':['Cozinha/KDS'],'RETIRADA':['Pedidos','Delivery'],
  'CAIXA':['Caixa'],'FINANCEIRO':['Financeiro'],'CONTAS':['Financeiro'],'RELATÓRIOS':['Relatórios'],
  'CADASTROS':['Clientes'],'ESTOQUE':['Produtos','Estoque'],'USUARIOS':['Usuários/Permissões'],'COMISSOES':['Comissões'],
  'GARCOM':['Garçom Mobile'],'DELIVERY':['Delivery'],'PRODUCAO':['Cozinha/KDS'],'CARDAPIO':['Produtos'],
- 'PROPRIETARIO':['Relatórios'],'HISTORICO':['Relatórios'],'FECHAMENTO':['Caixa'],'AUDITORIA':['Configurações'],'CANCELAMENTOS':['PDV/Vendas'],
+ 'PROPRIETARIO':['Relatórios'],'HISTORICO':['Relatórios'],'FECHAMENTO':['Caixa'],'AUDITORIA':['Configurações'],'CANCELAMENTOS':['Configurações'],
  'CONFIG':['Configurações'],'PROPAGANDA':['Configurações'],'IMPRESSAO':['Configurações'],'PAGAMENTOS':['Configurações'],'SINCRONIZACAO':['Configurações'],'BACKUP':['Configurações'],'ATUALIZAR':['Configurações']
  };
  let allowed=null;
