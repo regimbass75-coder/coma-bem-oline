@@ -1587,9 +1587,43 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
        else next.style.removeProperty('display');
      }
    });
+   // Regra final: todo grupo sem filho autorizado deve ficar invisível.
+   const nav=document.querySelector('aside.sidebar nav');
+   if(nav){
+     nav.querySelectorAll('[data-v]').forEach(el=>{
+       const show=permitted(el.dataset.v);
+       el.hidden=!show;el.style.setProperty('display',show?'':'none',show?'':'important');
+     });
+     nav.querySelectorAll('.menu-group').forEach(el=>{
+       if(el.id==='menuVenda')return;
+       if(el.closest('#menuVenda'))return;
+       if(el.tagName!=='BUTTON')return;
+       const sibling=el.nextElementSibling;
+       const group=sibling && (sibling.classList.contains('submenu')||sibling.classList.contains('menu-subitems'))?sibling:null;
+       if(!group)return;
+       const show=Array.from(group.querySelectorAll('[data-v]')).some(x=>permitted(x.dataset.v));
+       el.hidden=!show;el.style.setProperty('display',show?'':'none',show?'':'important');
+     });
+     const venda=document.getElementById('menuVenda');
+     if(venda){
+       const show=Array.from(venda.querySelectorAll('[data-v]')).some(x=>permitted(x.dataset.v));
+       venda.hidden=!show;venda.style.setProperty('display',show?'block':'none','important');
+     }
+     for(const id of ['atendMenu','finMenu','cadMenu','opMenu','gestMenu','cfgMenu']){
+       const group=document.getElementById(id);if(!group)continue;
+       const show=Array.from(group.querySelectorAll('[data-v]')).some(x=>permitted(x.dataset.v));
+       if(!show){group.hidden=true;group.style.setProperty('display','none','important')}
+       const header=group.previousElementSibling;
+       if(header && header.tagName==='BUTTON'){header.hidden=!show;header.style.setProperty('display',show?'':'none',show?'':'important')}
+     }
+   }
    const first=Array.from(document.querySelectorAll('nav [data-v]')).find(el=>permitted(el.dataset.v));
    const visible=document.querySelector('main section:not(.hide)');
-   if(visible && !permitted(visible.id) && first)first.click();
+   if(first && (!visible || !permitted(visible.id))){
+     first.click();
+     // Alguns módulos antigos alteram a tela depois do login: reafirmar a seleção autorizada.
+     setTimeout(()=>{const current=document.querySelector('main section:not(.hide)');if(current && !permitted(current.id))first.click()},150);
+   }
  }
  window.ugApplyModules=function(data){
    const mods=data&&data.modules;
