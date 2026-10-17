@@ -2610,7 +2610,17 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const selected={'DINHEIRO':'DINHEIRO','PIX':'PIX','DEBITO':'CARTAO','CREDITO':'CARTAO'}[event.data.forma];
   const field=document.getElementById('pagForma');
   if(field&&selected&&[...field.options].some(o=>o.value===selected))field.value=selected;
-  alert('Itens transferidos. Confira a forma de pagamento e confirme no PDV principal. A venda ainda NÃO foi concluída.');
+  const payments=event.data.pagamentos;
+  if(Array.isArray(payments)&&payments.length&&payments.length<=12){
+   const form=document.getElementById('pagForma'),value=document.getElementById('pagRecebido');
+   const totalTransferido=itens.reduce((sum,x)=>sum+x.qtd*x.preco,0);
+   const soma=payments.reduce((sum,p)=>sum+Number(p.valor||0),0);
+   const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO'};
+   if(Math.abs(totalTransferido-soma)<0.02&&payments.every(p=>map[p.forma]&&Number.isFinite(p.valor)&&p.valor>0)&&form&&value&&typeof adicionarPagamento==='function'){
+    for(const p of payments){if(![...form.options].some(o=>o.value===map[p.forma]))break;form.value=map[p.forma];value.value=String(p.valor);adicionarPagamento()}
+   }
+  }
+  alert('Itens e pagamentos transferidos para conferência. Confira os valores e confirme no PDV principal. A venda ainda NÃO foi concluída.');
  });
 })();
 </script></body></html>
