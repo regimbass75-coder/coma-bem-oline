@@ -1,5 +1,5 @@
 // UniGestor homologacao: shell offline sem interceptar API nem dados de outras empresas.
-const CACHE='unigestor-hom-offline-v6';
+const CACHE='unigestor-hom-offline-v7';
 const SHELL=['/','/manifest.webmanifest','/logo-unigestor.png'];
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{
