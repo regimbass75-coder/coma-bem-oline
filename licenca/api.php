@@ -90,6 +90,35 @@ if($action==='me'){
     'restaurant'=>['id'=>$_SESSION['restaurant_id'],'name'=>$lic['establishment']??''],
     'license'=>['status'=>'ATIVA','expires_at'=>$lic['expires_at']??null,'days_left'=>days_left($lic),'version'=>$lic['version']??null]]);
 }
+// Revalidação de senha para operações sensíveis sem trocar a sessão atual.
+if($action==='authorize'){
+  if($_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  start_app();
+  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão expirada. Entre novamente no UniGestor.'],401);
+  $input=json_decode(file_get_contents('php://input'),true);
+  if(!is_array($input))$input=[];
+  $login=trim((string)($input['login']??''));
+  $senha=(string)($input['senha']??'');
+  if($login===''||$senha==='')outj(['ok'=>false,'erro'=>'Informe usuário e senha.'],400);
+  if(!ug_login_rate_check($login))outj(['ok'=>false,'erro'=>'Muitas tentativas. Aguarde.'],429);
+  $actor=ug_user_by_session();
+  if(!$actor)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $rid=(string)($_SESSION['restaurant_id']??'');
+  $matches=[];
+  foreach(read_json(USERS_FILE,[]) as $candidate)
+    if(is_array($candidate)&&strtolower(trim((string)($candidate['login']??'')))===strtolower($login)&&
+       (string)($candidate['restaurant_id']??'')===$rid)$matches[]=$candidate;
+  $u=count($matches)===1?$matches[0]:null;
+  if(!$u||!ug_is_active($u)||!password_verify($senha,(string)($u['password_hash']??''))){
+    ug_login_rate($login);outj(['ok'=>false,'erro'=>'Usuário ou senha inválidos.'],401);
+  }
+  $role=strtoupper((string)($u['role']??''));
+  if(!in_array($role,['ADMINISTRADOR','GERENTE','ADMIN','MANAGER'],true))
+    outj(['ok'=>false,'erro'=>'Somente administrador ou gerente pode autorizar.'],403);
+  ug_login_rate($login,true);
+  outj(['ok'=>true,'user'=>ug_user_payload($u)]);
+}
 // Backup individual de vendas da empresa autenticada.
 // O backup administrativo geral permanece exclusivo do Painel Master.
 if($action==='company_backup'){
