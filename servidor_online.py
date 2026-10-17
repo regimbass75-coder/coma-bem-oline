@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
@@ -61,7 +61,10 @@ def web_user():
 
 @app.get('/')
 def pagina_inicial_homologacao():
-    return send_from_directory('homologacao', 'index.html')
+    response = make_response(send_from_directory('homologacao', 'index.html'))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 @app.get('/frente-caixa.html')
 def frente_caixa_homologacao():
