@@ -201,6 +201,69 @@ if(in_array($action,['sales_list','sales_create'],true)){
     outj(['ok'=>false,'erro'=>'Falha no armazenamento central.'],503);
   }
 }
+// Pedidos abertos por empresa: separados de vendas e protegidos por sessao/permissoes.
+if(in_array($action,['orders_list','orders_upsert'],true)){
+ start_app();
+ try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();
+ $rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['PDV/Vendas','Caixa'], $perms) && !in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true))
+   outj(['ok'=>false,'erro'=>'Sem permissão de pedidos.'],403);
+ $dir=DATA_DIR.'/empresa-pedidos';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ $file=$dir.'/'.hash('sha256',$rid).'.json';
+ $fp=@fopen($file,'c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ try{
+  if(!flock($fp,LOCK_EX))throw new RuntimeException('lock');
+  rewind($fp);$raw=stream_get_contents($fp);
+  $rows=$raw?json_decode($raw,true):[];
+  if(!is_array($rows)||!array_is_list($rows))throw new RuntimeException('dados inválidos');
+  if($action==='orders_list'){
+   if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+   flock($fp,LOCK_UN);fclose($fp);
+   outj(['ok'=>true,'orders'=>$rows,'restaurant_id'=>$rid]);
+  }
+  if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  $body=file_get_contents('php://input');
+  if(strlen($body)>32768)outj(['ok'=>false,'erro'=>'Pedido excede tamanho permitido.'],413);
+  $v=json_decode($body,true);
+  if(!is_array($v)||!is_array($v['itens']??null)||!array_is_list($v['itens'])||count($v['itens'])<1||count($v['itens'])>200)
+    outj(['ok'=>false,'erro'=>'Pedido inválido.'],400);
+  $id=trim((string)($v['id']??''));
+  if(!preg_match('/^[a-zA-Z0-9_-]{5,100}$/D',$id))outj(['ok'=>false,'erro'=>'ID inválido.'],400);
+  $v['id']=$id;
+  $v['status']='ABERTO';
+  $v['usuario_id']=(string)$actor['id'];
+  $v['usuario_nome']=(string)($actor['name']??$actor['login']??'');
+  $v['registrado_em']=date('c');
+  $v['total']=round((float)($v['total']??0),2);
+  if(!is_finite($v['total'])||$v['total']<0||$v['total']>100000000)outj(['ok'=>false,'erro'=>'Valor inválido.'],400);
+  foreach($v['itens'] as $item){
+   if(!is_array($item)||!is_numeric($item['qtd']??null)||!is_numeric($item['preco']??null)||
+      (float)$item['qtd']<=0||(float)$item['preco']<0)outj(['ok'=>false,'erro'=>'Item inválido.'],400);
+  }
+  foreach($rows as $existing)if(($existing['id']??'')===$id){
+   flock($fp,LOCK_UN);fclose($fp);
+   outj(['ok'=>true,'id'=>$id,'duplicate'=>true]);
+  }
+  $rows[]=$v;
+  $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);
+  if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp))throw new RuntimeException('write');
+  flock($fp,LOCK_UN);fclose($fp);
+  outj(['ok'=>true,'id'=>$id,'user'=>$v['usuario_nome']]);
+ }catch(Throwable $e){
+  error_log('[UniGestor] falha banco pedidos: '.$e->getMessage());
+  if(is_resource($fp))fclose($fp);
+  outj(['ok'=>false,'erro'=>'Falha no armazenamento central de pedidos.'],503);
+ }
+}
 // Gestão de funcionários restrita ao administrador/gerente da própria empresa.
 if(in_array($action,['users_list','users_create','users_update'],true)){
   start_app();
