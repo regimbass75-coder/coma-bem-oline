@@ -325,7 +325,7 @@ body.login-page,
 <button type="button" data-v="VENDA_CAIXA_FUNCOES">Funções executadas no caixa</button>
 <button type="button" data-v="VENDA_ORCAMENTOS">📋 Orçamentos</button>
 <button type="button" data-v="VENDA_ORDENS_SERVICO">🛠️ Ordens de Serviço</button>
-</div></div><button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button><button data-v="PDV">🛒 PDV</button>
+</div></div><button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button><button data-v="PDV">🛒 PDV</button><button type="button" id="ugAbrirFrenteCaixa">⌨️ PDV Frente de Caixa</button>
 
 <button class="menu-group" type="button" onclick="toggleMenu('atendMenu',this)">🍽️ Atendimento <span>▾</span></button>
 <div id="atendMenu" class="submenu hide">
@@ -2502,7 +2502,38 @@ window.uvRender=k=>{
 window.uvImprimir=k=>{
  const client=el(k+'_cliente').value.trim();if(!client)return alert('Informe o cliente.');
  const title=k==='ORCAMENTOS'?'ORÇAMENTO':'ORDEM DE SERVIÇO';
- const doc=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${title}</title><style>body{font:14px Arial;margin:35px;color:#123}h1{color:#124778}table{width:100%;border-collapse:collapse}td,th{border:1px solid #bbb;padding:8px;text-align:left}</style></head><body><h1>${title}</h1><p><b>Número:</b> ${esc(el(k+'_numero').value||'Não salvo')} &nbsp; <b>Data:</b> ${esc(el(k+'_data').value)}</p><p><b>Cliente:</b> ${esc(client)} &nbsp; <b>Telefone:</b> ${esc(el(k+'_telefone').value)}</p><p><b>Previsão/validade:</b> ${esc(el(k+'_prazo').value)} &nbsp; <b>Status:</b> ${esc(el(k+'_status').value)}</p><p><b>Descrição:</b> ${esc(el(k+'_descricao').value)}</p><table><tr><th>Item</th><th>Qtd.</th><th>Unitário</th><th>Subtotal</th></tr>${items[k].map(x=>`<tr><td>${esc(x.descricao)}</td><td>${esc(x.qtd)}</td><td>${money(x.valor)}</td><td>${money(Number(x.qtd)*Number(x.valor))}</td></tr>`).join('')}</table><h2>Total: ${money(total(k))}</h2><p><b>Observações:</b> ${esc(el(k+'_obs').value)}</p><script>window.onload=function(){window.print()}<\/script></body></html>`;
+ const doc=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${title}</title><style>body{font:14px Arial;margin:35px;color:#123}h1{color:#124778}table{width:100%;border-collapse:collapse}td,th{border:1px solid #bbb;padding:8px;text-align:left}</style></head><body><h1>${title}</h1><p><b>Número:</b> ${esc(el(k+'_numero').value||'Não salvo')} &nbsp; <b>Data:</b> ${esc(el(k+'_data').value)}</p><p><b>Cliente:</b> ${esc(client)} &nbsp; <b>Telefone:</b> ${esc(el(k+'_telefone').value)}</p><p><b>Previsão/validade:</b> ${esc(el(k+'_prazo').value)} &nbsp; <b>Status:</b> ${esc(el(k+'_status').value)}</p><p><b>Descrição:</b> ${esc(el(k+'_descricao').value)}</p><table><tr><th>Item</th><th>Qtd.</th><th>Unitário</th><th>Subtotal</th></tr>${items[k].map(x=>`<tr><td>${esc(x.descricao)}</td><td>${esc(x.qtd)}</td><td>${money(x.valor)}</td><td>${money(Number(x.qtd)*Number(x.valor))}</td></tr>`).join('')}</table><h2>Total: ${money(total(k))}</h2><p><b>Observações:</b> ${esc(el(k+'_obs').value)}</p><script>window.onload=function(){window.print()}<\/script><script id="ug-frente-caixa-integration">
+(function(){
+ const button=document.getElementById('ugAbrirFrenteCaixa');
+ if(button)button.addEventListener('click',()=>{
+  const win=window.open('./frente-caixa.html','ug_frente_caixa','width=1300,height=850,resizable=yes,scrollbars=yes');
+  if(!win)alert('Permita a abertura de janelas para utilizar a Frente de Caixa.');
+ });
+ window.addEventListener('message',event=>{
+  if(event.origin!==location.origin||event.data?.type!=='ug_frente_caixa_transfer_v1')return;
+  if(!event.source||event.source.closed)return;
+  const itens=event.data.items;
+  if(!Array.isArray(itens)||!itens.length||itens.length>200)return;
+  if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof salvar!=='function')return alert('PDV principal indisponível.');
+  if(pdv.length)return alert('Há uma venda aberta no PDV principal. Finalize ou cancele antes de transferir.');
+  if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return alert('Itens inválidos.');
+  const produtos=JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]');
+  if(!itens.every(x=>{const p=produtos.find(p=>p.nome===x.nome);return p&&Number(p.preco)===x.preco&&Number(p.qtd)>=x.qtd}))return alert('Confira o estoque e os preços antes de transferir.');
+  pdv.push(...itens.map(x=>({nome:x.nome,qtd:x.qtd,preco:x.preco})));
+  localStorage.setItem('cb_hom_tipo_venda','BALCÃO');
+  localStorage.removeItem('cb_hom_mesa_pdv');
+  localStorage.removeItem('cb_hom_comanda_pdv');
+  salvar();
+  if(typeof abrirTela==='function')abrirTela('PDV');
+  if(typeof renderPdv==='function')renderPdv();
+  abrirPagamento();
+  const selected={'DINHEIRO':'DINHEIRO','PIX':'PIX','DEBITO':'CARTAO','CREDITO':'CARTAO'}[event.data.forma];
+  const field=document.getElementById('pagForma');
+  if(field&&selected&&[...field.options].some(o=>o.value===selected))field.value=selected;
+  alert('Itens transferidos. Confira a forma de pagamento e confirme no PDV principal. A venda ainda NÃO foi concluída.');
+ });
+})();
+</script></body></html>`;
  const w=window.open('','_blank');if(!w)return alert('Permita a abertura de janelas para imprimir.');w.document.open();w.document.write(doc);w.document.close();
 };
 document.addEventListener('DOMContentLoaded',()=>Object.keys(K).forEach(k=>{uvNovo(k);uvRender(k)}));
