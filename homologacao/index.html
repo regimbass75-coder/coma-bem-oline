@@ -2522,7 +2522,48 @@ function total(){return cart.reduce((s,p)=>s+Number(p.qtd)*Number(p.preco),0)}
 function listProducts(id,q,add){const root=$(id);if(!root)return;let found=search(q,prod(),['nome','codigo','barras']).slice(0,40);root.innerHTML=found.length?found.map((p,i)=>`<div class="ve-result"><div><b>${esc(p.nome)}</b><div>${money(p.preco)} · Estoque: ${esc(p.qtd??0)} ${p.codigo?'· '+esc(p.codigo):''}</div></div>${add?`<button type="button" data-p="${i}">Adicionar</button>`:''}</div>`).join(''):'<div class="ve-empty">Nenhum produto encontrado.</div>';if(add)root.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{const p=found[Number(b.dataset.p)];if(!p)return;const x=cart.find(i=>i.nome===p.nome);const qty=(x?.qtd||0)+1;if(qty>Number(p.qtd||0))return alert('Estoque insuficiente.');if(x)x.qtd=qty;else cart.push({nome:p.nome,preco:Number(p.preco)||0,qtd:1,grupo:p.grupo||''});renderCart()});}
 function renderCart(){const root=$('veCarrinho');root.innerHTML=cart.length?cart.map((p,i)=>`<div class="ve-line"><b>${esc(p.nome)}</b><input aria-label="Quantidade" type="number" min="1" step="1" value="${p.qtd}" data-qty="${i}"><span class="ve-price">${money(p.preco*p.qtd)}</span><button type="button" class="ve-secondary" data-del="${i}">Excluir</button></div>`).join(''):'<div class="ve-empty">Nenhum item adicionado.</div>';$('veTotal').textContent=money(total());root.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{cart.splice(Number(b.dataset.del),1);renderCart()});root.querySelectorAll('[data-qty]').forEach(b=>b.onchange=()=>{const i=Number(b.dataset.qty),n=Number(b.value),p=prod().find(x=>x.nome===cart[i].nome);if(!Number.isInteger(n)||n<1||n>Number(p?.qtd||0)){alert('Quantidade inválida ou estoque insuficiente.');renderCart();return}cart[i].qtd=n;renderCart()});}
 function orders(){return get(K)}
-function save(){const cliente=$('veCliente').value.trim();if(!cliente)return alert('Informe o cliente.');if(!cart.length)return alert('Adicione ao menos um produto.');let arr=orders();let id=current||('EXT-'+Date.now());let obj={id,cliente,obs:$('veObs').value.trim(),itens:cart.map(x=>({...x})),total:total(),status:'RASCUNHO',atualizado:new Date().toISOString()};const i=arr.findIndex(x=>x.id===id);if(i<0)arr.unshift(obj);else arr[i]=obj;try{localStorage.setItem(K,JSON.stringify(arr));current=id;renderOrders();return true}catch(e){alert('Não foi possível salvar pedido neste dispositivo: '+e.message);return false}}
+const orderQueueKey=()=> 'ug_pedidos_pendentes_v1_'+String(window.__cbRestaurante?.id||'sem_empresa');
+function pendingOrders(){return get(orderQueueKey())}
+function queueOrder(order){
+ const q=pendingOrders(),i=q.findIndex(x=>x.id===order.id);
+ if(i>=0)q[i]=order;else q.push(order);
+ localStorage.setItem(orderQueueKey(),JSON.stringify(q));
+}
+async function centralOrderRequest(action,body){
+ const options={credentials:'same-origin',cache:'no-store'};
+ if(body){options.method='POST';options.headers={'Content-Type':'application/json'};options.body=JSON.stringify(body)}
+ const response=await fetch('./licenca/api.php?action='+action,options);
+ const result=await response.json();
+ if(!response.ok||!result.ok)throw new Error(result.erro||'Servidor indisponível');
+ return result;
+}
+let syncingOrders=false;
+async function syncExternalOrders(){
+ if(syncingOrders||!window.__cbRestaurante?.id||!window.__cbUsuarioLogado)return;
+ syncingOrders=true;
+ try{
+  for(const order of pendingOrders()){
+   await centralOrderRequest('orders_upsert',order);
+   localStorage.setItem(orderQueueKey(),JSON.stringify(pendingOrders().filter(x=>x.id!==order.id)));
+  }
+  const data=await centralOrderRequest('orders_list');
+  if(String(data.restaurant_id)!==String(window.__cbRestaurante.id))return;
+  const local=orders(),ids=new Set(local.map(x=>x.id));
+  for(const o of data.orders||[])if(!ids.has(o.id))local.unshift(o);
+  localStorage.setItem(K,JSON.stringify(local));
+  renderOrders();
+  const kitchenKey='cb_hom_cozinha',kitchen=get(kitchenKey),known=new Set(kitchen.map(x=>x.id));
+  for(const o of data.orders||[])if(!known.has(o.id)){
+   kitchen.unshift({...o,origem:'VENDA EXTERNA',status:'ENVIADO',abertura:o.registrado_em||o.atualizado,garcom:o.usuario_nome||'',pedido_numero:o.id});
+   known.add(o.id);
+  }
+  localStorage.setItem(kitchenKey,JSON.stringify(kitchen));
+  if(typeof window.renderPedidos==='function')window.renderPedidos();
+ }catch(e){console.warn('Sincronização de pedidos pendente:',e.message)}
+ finally{syncingOrders=false}
+}
+
+function save(){const cliente=$('veCliente').value.trim();if(!cliente)return alert('Informe o cliente.');if(!cart.length)return alert('Adicione ao menos um produto.');let arr=orders();let id=current||('EXT-'+Date.now());let obj={id,cliente,obs:$('veObs').value.trim(),itens:cart.map(x=>({...x})),total:total(),status:'RASCUNHO',atualizado:new Date().toISOString()};const i=arr.findIndex(x=>x.id===id);if(i<0)arr.unshift(obj);else arr[i]=obj;try{localStorage.setItem(K,JSON.stringify(arr));current=id;queueOrder(obj);renderOrders();return true}catch(e){alert('Não foi possível salvar pedido neste dispositivo: '+e.message);return false}}
 function clear(){current=null;cart=[];$('veCliente').value='';$('veObs').value='';$('veBuscaPedido').value='';$('veResultadosPedido').innerHTML='';renderCart()}
 function renderOrders(){const root=$('veListaPedidos'),arr=orders();root.innerHTML=arr.length?arr.map((o,i)=>`<div class="ve-result"><div><b>${esc(o.id)}</b><div>${esc(o.cliente)} · ${money(o.total)} · ${esc(o.status)}</div></div><button type="button" data-load="${i}">Abrir</button></div>`).join(''):'<div class="ve-empty">Nenhum pedido salvo.</div>';root.querySelectorAll('[data-load]').forEach(b=>b.onclick=()=>{const o=arr[Number(b.dataset.load)];current=o.id;cart=o.itens.map(x=>({...x}));$('veCliente').value=o.cliente;$('veObs').value=o.obs||'';renderCart();window.scrollTo({top:0,behavior:'smooth'})});}
 function finish(){if(!cart.length)return alert('Adicione produtos.');if(!$('veCliente').value.trim())return alert('Informe o cliente.');if(!save())return;const currentPdv=JSON.parse(localStorage.getItem('cb_hom_pdv')||'[]');if((Array.isArray(currentPdv)&&currentPdv.length)||(typeof pdv!=='undefined'&&pdv.length))return alert('Existe uma venda aberta no PDV. Finalize ou cancele essa venda antes de transferir o pedido externo.');for(const x of cart){const p=prod().find(y=>y.nome===x.nome);if(!p||Number(p.qtd||0)<x.qtd)return alert('Estoque insuficiente para '+x.nome)}
@@ -2539,6 +2580,6 @@ function finish(){if(!cart.length)return alert('Adicione produtos.');if(!$('veCl
 }
 function renderClients(){const root=$('veListaClientes'),a=search($('veBuscaCliente').value,clients(),['nome','telefone','celular','cpf','cnpj']).slice(0,40);root.innerHTML=a.length?a.map((c,i)=>`<div class="ve-result"><div><b>${esc(c.nome)}</b><div>${esc(c.telefone||c.celular||'')} ${esc(c.cpf||c.cnpj||'')}</div></div><button type="button" data-client="${i}">Selecionar</button></div>`).join(''):'<div class="ve-empty">Nenhum cliente encontrado.</div>';root.querySelectorAll('[data-client]').forEach(b=>b.onclick=()=>{$('veCliente').value=a[Number(b.dataset.client)].nome;tab('pedidos')});}
 function tab(t){document.querySelectorAll('[data-ve-tab]').forEach(b=>b.classList.toggle('ve-active',b.dataset.veTab===t));for(const n of ['pedidos','estoque','clientes'])$('ve-'+n).hidden=n!==t;if(t==='estoque')listProducts('veListaEstoque',$('veBuscaEstoque').value,false);if(t==='clientes')renderClients();if(t==='pedidos'){$('veClientes').innerHTML=clients().map(c=>`<option value="${esc(c.nome)}"></option>`).join('');renderOrders()}}
-document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;document.querySelectorAll('[data-ve-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.veTab));$('veBuscaPedido').oninput=e=>listProducts('veResultadosPedido',e.target.value,true);$('veBtnBuscaPedido').onclick=()=>listProducts('veResultadosPedido',$('veBuscaPedido').value,true);$('veBuscaEstoque').oninput=e=>listProducts('veListaEstoque',e.target.value,false);$('veBuscaCliente').oninput=renderClients;$('veSalvar').onclick=()=>{if(save())alert('Pedido salvo neste navegador.');};$('veFinalizar').onclick=finish;$('veLimpar').onclick=clear;$('veAbrirCadastro').onclick=()=>document.querySelector('.nav button[data-v="CLIENTES"]')?.click();renderCart();tab('pedidos')});
+document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;document.querySelectorAll('[data-ve-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.veTab));$('veBuscaPedido').oninput=e=>listProducts('veResultadosPedido',e.target.value,true);$('veBtnBuscaPedido').onclick=()=>listProducts('veResultadosPedido',$('veBuscaPedido').value,true);$('veBuscaEstoque').oninput=e=>listProducts('veListaEstoque',e.target.value,false);$('veBuscaCliente').oninput=renderClients;$('veSalvar').onclick=async()=>{if(!save())return;await syncExternalOrders();alert(pendingOrders().length?'Pedido salvo neste aparelho, aguardando sincronização.':'Pedido salvo e enviado ao servidor.');};$('veFinalizar').onclick=finish;$('veLimpar').onclick=clear;$('veAbrirCadastro').onclick=()=>document.querySelector('.nav button[data-v="CLIENTES"]')?.click();renderCart();tab('pedidos');syncExternalOrders();setInterval(syncExternalOrders,15000)});
 })();
 </script></body></html>
