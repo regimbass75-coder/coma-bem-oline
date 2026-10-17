@@ -2590,6 +2590,13 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const win=window.open('./frente-caixa.html','ug_frente_caixa','width=1300,height=850,resizable=yes,scrollbars=yes');
   if(!win)alert('Permita a abertura de janelas para utilizar a Frente de Caixa.');
  });
+ window.addEventListener('message',event=>{
+  if(event.origin!==location.origin||event.data?.type!=='ug_config_auth_request'||!event.source||event.source.closed)return;
+  const {id,login,senha}=event.data;
+  const user=typeof usuarios!=='undefined'&&Array.isArray(usuarios)?usuarios.find(u=>u.ativo!==false&&String(u.login||'').toLowerCase()===String(login||'').trim().toLowerCase()&&String(u.senha||'')===String(senha||'')):null;
+  const allowed=!!user&&['ADMINISTRADOR','GERENTE'].includes(String(user.perfil||'').toUpperCase());
+  event.source.postMessage({type:'ug_config_auth_result',id,ok:allowed,erro:allowed?'':user?'Somente administrador ou gerente pode configurar os equipamentos.':'Usuário ou senha inválidos.'},location.origin);
+ });
  let busy=false;
  window.addEventListener('message',async event=>{
   if(event.origin!==location.origin||event.data?.type!=='ug_frente_caixa_transfer_v1')return;
