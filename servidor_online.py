@@ -63,6 +63,10 @@ def web_user():
 def pagina_inicial_homologacao():
     return send_from_directory('homologacao', 'index.html')
 
+@app.get('/frente-caixa.html')
+def frente_caixa_homologacao():
+    return send_from_directory('homologacao', 'frente-caixa.html')
+
 @app.get('/logo-unigestor.png')
 def homolog_logo():
     return send_from_directory('homologacao', 'logo-unigestor.png')
