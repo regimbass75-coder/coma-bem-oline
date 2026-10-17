@@ -1592,7 +1592,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  'INÍCIO':['Relatórios'],'VENDA_CONSULTA':[],'VENDA_PROMOCOES':[],'VENDA_ACOMPANHAMENTO':[],'VENDA_INDICADORES':['Relatórios'],'VENDA_CAIXA_FUNCOES':['Caixa'],'VENDA_ORCAMENTOS':[],'VENDA_ORDENS_SERVICO':[],
  'VENDA_EXTERNA':['Venda Externa'],'PDV':['PDV/Vendas'],'MESAS':['Mesas'],'COMANDAS':['Comandas'],'PEDIDOS':['Pedidos'],'COZINHA':['Cozinha/KDS'],'RETIRADA':['Pedidos','Delivery'],
  'CAIXA':['Caixa'],'FINANCEIRO':['Financeiro'],'CONTAS':['Financeiro'],'RELATÓRIOS':['Relatórios'],
- 'CADASTROS':['Clientes'],'ESTOQUE':['Produtos','Estoque'],'USUARIOS':['Usuários/Permissões'],'COMISSOES':['Comissões'],
+ 'CADASTROS':['Clientes'],'ESTOQUE':['Produtos','Estoque'],'FISCAL':['Produtos','Estoque'],'USUARIOS':['Usuários/Permissões'],'COMISSOES':['Comissões'],
  'GARCOM':['Garçom Mobile'],'DELIVERY':['Delivery'],'PRODUCAO':['Cozinha/KDS'],'CARDAPIO':['Produtos'],
  'PROPRIETARIO':['Relatórios'],'HISTORICO':['Relatórios'],'FECHAMENTO':['Caixa'],'AUDITORIA':['Configurações'],'CANCELAMENTOS':['Configurações'],
  'CONFIG':['Configurações'],'PROPAGANDA':['Configurações'],'IMPRESSAO':['Configurações'],'PAGAMENTOS':['Configurações'],'SINCRONIZACAO':['Configurações'],'BACKUP':['Configurações'],'ATUALIZAR':['Configurações']
@@ -1604,7 +1604,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
    document.querySelectorAll('nav [data-v]').forEach(el=>{el.hidden=!permitted(el.dataset.v);el.style.display=permitted(el.dataset.v)?'':'none'});
    const menuGroups={menuVenda:['VENDA_CONSULTA','VENDA_PROMOCOES','VENDA_ACOMPANHAMENTO','VENDA_INDICADORES','VENDA_CAIXA_FUNCOES','VENDA_ORCAMENTOS','VENDA_ORDENS_SERVICO'],
      atendMenu:['MESAS','COMANDAS','PEDIDOS','COZINHA','RETIRADA'],finMenu:['CAIXA','FINANCEIRO','CONTAS','RELATÓRIOS'],
-     cadMenu:['CADASTROS','ESTOQUE','USUARIOS','COMISSOES'],opMenu:['GARCOM','DELIVERY','PRODUCAO','CARDAPIO'],
+     cadMenu:['CADASTROS','ESTOQUE','FISCAL','USUARIOS','COMISSOES'],opMenu:['GARCOM','DELIVERY','PRODUCAO','CARDAPIO'],
      gestMenu:['PROPRIETARIO','CONTAS','HISTORICO','FECHAMENTO','AUDITORIA','CANCELAMENTOS'],
      cfgMenu:['CONFIG','PROPAGANDA','IMPRESSAO','PAGAMENTOS','SINCRONIZACAO','BACKUP','ATUALIZAR']};
    for(const [id,items] of Object.entries(menuGroups)){
