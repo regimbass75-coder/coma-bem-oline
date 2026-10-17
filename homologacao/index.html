@@ -715,7 +715,23 @@ function addPdv(nome,preco){
  if(x){x.qtd++;if(!x.grupo)x.grupo=e?.grupo||"";}
  else pdv.push({nome,preco,qtd:1,grupo:e?.grupo||""});
  salvar();
-}function delPdv(i){let x=pdv[i];if(!x)return;let login=prompt("Autorização para cancelar item.\nLogin do ADMINISTRADOR ou GERENTE:");if(login===null)return;let u=usuarios.find(a=>a.ativo&&a.login.toLowerCase()===String(login).trim().toLowerCase()&&(a.perfil==="ADMINISTRADOR"||a.perfil==="GERENTE"));if(!u)return alert("Usuário sem autorização para cancelar item.");let senha=prompt("Senha/autorização de "+u.nome+":");if(senha===null)return;if(String(u.senha||"")!==String(senha))return alert("Senha/autorização inválida.");let cancelamentos=JSON.parse(localStorage.getItem("cb_hom_cancelamentos")||"[]");cancelamentos.unshift({data:new Date().toLocaleString("pt-BR"),produto:x.nome,qtd:x.qtd,usuario:u.nome});localStorage.setItem("cb_hom_cancelamentos",JSON.stringify(cancelamentos));auditar("ITEM CANCELADO",x.qtd+"x "+x.nome+" • autorizado por "+u.nome);pdv.splice(i,1);salvar();renderCancelamentos()}function totalPdv(){return pdv.reduce((s,i)=>s+i.preco*i.qtd,0)}function definirTipoVenda(tipo,abrir){
+}async function ugAutorizarOperacao(login,senha){
+ const res=await fetch('./licenca/api.php?action=authorize',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,senha}),cache:'no-store'});
+ const data=await res.json();if(!res.ok||!data.ok)throw Error(data.erro||'Autorização recusada.');return data.user;
+}
+async function delPdv(i){
+ const x=pdv[i];if(!x)return;
+ const login=prompt('Autorização para cancelar item.\\nLogin do ADMINISTRADOR ou GERENTE:');
+ if(login===null)return;
+ const senha=prompt('Senha de autorização:');if(senha===null)return;
+ let u;try{u=await ugAutorizarOperacao(login,senha)}catch(e){alert('Acesso não autorizado: '+e.message);return}
+ const cancelamentos=JSON.parse(localStorage.getItem('cb_hom_cancelamentos')||'[]');
+ cancelamentos.unshift({data:new Date().toLocaleString('pt-BR'),produto:x.nome,qtd:x.qtd,usuario:u.name||u.login});
+ localStorage.setItem('cb_hom_cancelamentos',JSON.stringify(cancelamentos));
+ auditar('ITEM CANCELADO',x.qtd+'x '+x.nome+' • autorizado por '+(u.name||u.login));
+ pdv.splice(i,1);salvar();renderCancelamentos();renderPdv();
+}
+function totalPdv(){return pdv.reduce((s,i)=>s+i.preco*i.qtd,0)}function definirTipoVenda(tipo,abrir){
  const t=String(tipo||"BALCÃO").toUpperCase();
  localStorage.setItem("cb_hom_tipo_venda",t);
  if(t!=="MESA") localStorage.removeItem("cb_hom_mesa_pdv");
@@ -2593,9 +2609,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
  window.addEventListener('message',event=>{
   if(event.origin!==location.origin||event.data?.type!=='ug_config_auth_request'||!event.source||event.source.closed)return;
   const {id,login,senha}=event.data;
-  const user=typeof usuarios!=='undefined'&&Array.isArray(usuarios)?usuarios.find(u=>u.ativo!==false&&String(u.login||'').toLowerCase()===String(login||'').trim().toLowerCase()&&String(u.senha||'')===String(senha||'')):null;
-  const allowed=!!user&&['ADMINISTRADOR','GERENTE'].includes(String(user.perfil||'').toUpperCase());
-  event.source.postMessage({type:'ug_config_auth_result',id,ok:allowed,erro:allowed?'':user?'Somente administrador ou gerente pode configurar os equipamentos.':'Usuário ou senha inválidos.'},location.origin);
+  (async()=>{try{await ugAutorizarOperacao(login,senha);event.source.postMessage({type:'ug_config_auth_result',id,ok:true},location.origin)}catch(e){event.source.postMessage({type:'ug_config_auth_result',id,ok:false,erro:e.message},location.origin)}})();
  });
  let busy=false;
  window.addEventListener('message',async event=>{
