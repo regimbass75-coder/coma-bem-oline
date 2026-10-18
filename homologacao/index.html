@@ -934,7 +934,7 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
    if(typeof renderMesas==="function")renderMesas();
  }
  pdv=[];pagamentosPdv=[];fecharPagamento();salvar();renderClientes();renderFinanceiro();auditar("VENDA FINALIZADA",forma+" • "+moeda(total));
- if(window.__ugFrenteCaixaReply){const fn=window.__ugFrenteCaixaReply;window.__ugFrenteCaixaReply=null;fn(true,{mensagem:'Venda registrada; impressão na Frente de Caixa.',recibo:htmlReciboVenda(venda)});}
+ if(window.__ugFrenteCaixaReply){const fn=window.__ugFrenteCaixaReply;window.__ugFrenteCaixaReply=null;fn(true,{mensagem:'Venda registrada; impressão na Frente de Caixa.',recibo:htmlReciboFrenteCaixa(venda)});}
  if(window.ugEnviarVendaCentral) {try{await window.ugEnviarVendaCentral(venda)}catch(e){console.error('Sincronização da venda:',e)}}
  if(!window.__ugFrenteCaixaSilent)alert("Venda finalizada.");
  try{
@@ -1479,6 +1479,24 @@ function htmlReciboVenda(v){
  '<div class="rc-row rc-total"><span>VALOR TOTAL</span><span>'+moeda(v.total)+'</span></div>'+
  '<div class="rc-line"></div><b>PAGAMENTO</b>'+pg+
  '<div class="rc-line"></div><div class="rc-center"><b>OBRIGADO E VOLTE SEMPRE!</b><br><span class="rc-small">UniGestor Restaurante</span></div></div>';
+}
+function htmlReciboFrenteCaixa(v){
+ const d=dadosEmpresaRecibo(),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const valor=n=>moeda(Number(n)||0),itens=Array.isArray(v.itens)?v.itens:[],pags=Array.isArray(v.pagamentos)?v.pagamentos:[];
+ const linhas=itens.map(i=>'<div class="fc-item"><span>'+esc(i.qtd)+' UN '+esc(i.nome)+'</span><span>'+valor(i.preco)+'</span><span>'+valor(Number(i.qtd)*Number(i.preco))+'</span></div>').join('');
+ const pagos=pags.map(p=>'<div class="fc-row"><span>'+esc(({DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTÃO DÉBITO',CREDITO:'CARTÃO CRÉDITO',CARTAO:'CARTÃO',BOLETO:'BOLETO'})[p.forma]||p.forma)+'</span><span>'+valor(p.valor)+'</span></div>').join('');
+ const data=esc(v.data||new Date().toLocaleDateString('pt-BR')),hora=esc(v.hora||'');
+ return '<div class="fc-cupom"><div class="fc-empresa">'+esc(d.emp)+'</div>'+
+ (d.end?'<div>'+esc(d.end)+'</div>':'')+(d.cnpj?'<div>CNPJ: '+esc(d.cnpj)+'</div>':'')+(d.ie?'<div>IE: '+esc(d.ie)+'</div>':'')+(d.tel?'<div>FONE: '+esc(d.tel)+'</div>':'')+
+ '<div class="fc-line"></div><div class="fc-row fc-strong"><span>RECIBO: '+esc(v.id||'-')+'</span><span>'+data+' '+hora+'</span></div>'+
+ '<div>CONSUMIDOR: '+esc(v.cliente||'NÃO IDENTIFICADO')+'</div><div>CPF/CNPJ: __________________</div>'+
+ '<div class="fc-line"></div><div class="fc-item fc-strong"><span>QTD DESCRIÇÃO</span><span>UNIT.</span><span>TOTAL</span></div><div class="fc-line"></div>'+linhas+
+ '<div class="fc-line"></div><div class="fc-row"><span>Total Bruto dos Itens</span><span>'+valor(v.total)+'</span></div>'+
+ '<div class="fc-row"><span>Desconto sobre Itens</span><span>'+valor(0)+'</span></div>'+
+ '<div class="fc-row"><span>Acréscimo sobre Itens</span><span>'+valor(0)+'</span></div>'+
+ '<div class="fc-row fc-strong"><span>Valor Total</span><span>'+valor(v.total)+'</span></div>'+pagos+
+ '<div class="fc-row"><span>Troco</span><span>'+valor(0)+'</span></div>'+
+ '<div class="fc-line"></div><div class="fc-obrigado">OBRIGADO E VOLTE SEMPRE!</div><div class="fc-small">Comprovante não fiscal</div></div>';
 }
 async function imprimirVendaDireta(v){
  let old=document.getElementById("cbPrintLayer"); if(old) old.remove();
