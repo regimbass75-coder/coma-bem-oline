@@ -119,6 +119,30 @@ if($action==='authorize'){
   ug_login_rate($login,true);
   outj(['ok'=>true,'user'=>ug_user_payload($u)]);
 }
+// Autorização de cancelamento por senha, restrita à empresa da sessão.
+if($action==='authorize_password'){
+  if($_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  start_app();
+  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão expirada.'],401);
+  $actor=ug_user_by_session();
+  $rid=(string)($_SESSION['restaurant_id']??'');
+  if(!$actor||$rid==='')outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $input=json_decode(file_get_contents('php://input'),true);
+  $senha=is_array($input)?(string)($input['senha']??''):'';
+  if($senha==='')outj(['ok'=>false,'erro'=>'Informe a senha do fiscal ou administrador.'],400);
+  $rateKey='cancel-password-'.$rid.'-'.(string)($actor['id']??'');
+  if(!ug_login_rate_check($rateKey))outj(['ok'=>false,'erro'=>'Muitas tentativas. Aguarde.'],429);
+  $matches=[];
+  foreach(read_json(USERS_FILE,[]) as $candidate){
+    if(!is_array($candidate)||(string)($candidate['restaurant_id']??'')!==$rid||!ug_is_active($candidate))continue;
+    if(!in_array(strtoupper((string)($candidate['role']??'')),['ADMINISTRADOR','GERENTE','ADMIN','MANAGER','FISCAL'],true))continue;
+    if(password_verify($senha,(string)($candidate['password_hash']??'')))$matches[]=$candidate;
+  }
+  if(count($matches)!==1){ug_login_rate($rateKey);outj(['ok'=>false,'erro'=>'Senha inválida ou autorização ambígua.'],401);}
+  if(!ug_login_rate($rateKey,true))outj(['ok'=>false,'erro'=>'Falha no controle de tentativas.'],503);
+  outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
+}
 // Backup individual de vendas da empresa autenticada.
 // O backup administrativo geral permanece exclusivo do Painel Master.
 if($action==='company_backup'){
