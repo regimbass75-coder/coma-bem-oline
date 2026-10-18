@@ -934,11 +934,11 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
    if(typeof renderMesas==="function")renderMesas();
  }
  pdv=[];pagamentosPdv=[];fecharPagamento();salvar();renderClientes();renderFinanceiro();auditar("VENDA FINALIZADA",forma+" • "+moeda(total));
- if(window.__ugFrenteCaixaReply){const fn=window.__ugFrenteCaixaReply;window.__ugFrenteCaixaReply=null;fn(true,'Venda registrada; impressão em andamento.');}
+ if(window.__ugFrenteCaixaReply){const fn=window.__ugFrenteCaixaReply;window.__ugFrenteCaixaReply=null;fn(true,{mensagem:'Venda registrada; impressão na Frente de Caixa.',recibo:htmlReciboVenda(venda)});}
  if(window.ugEnviarVendaCentral) {try{await window.ugEnviarVendaCentral(venda)}catch(e){console.error('Sincronização da venda:',e)}}
  if(!window.__ugFrenteCaixaSilent)alert("Venda finalizada.");
  try{
-   const r=await imprimirVendaDireta(venda);
+   const r=window.__ugFrenteCaixaSilent?{ok:true,modo:'IMPRESSAO_NA_FRENTE_CAIXA'}:await imprimirVendaDireta(venda);
    if(!r.ok) {console.error("Impressão:",r.erro);if(!window.__ugFrenteCaixaSilent)alert("Venda finalizada, mas o recibo não foi impresso: "+(r.erro||"verifique a impressora."));}
  }catch(e){console.error("Impressão:",e);if(!window.__ugFrenteCaixaSilent)alert("Venda finalizada, mas não foi possível imprimir o recibo: "+e.message);}finally{window.__ugFrenteCaixaSilent=false;}
 }document.addEventListener("change",e=>{if(e.target.id==="pagForma"){renderPagamentos();preencherRestantePagamento()}});document.addEventListener("DOMContentLoaded",()=>{renderMeiosPagamento();renderCmd();});document.addEventListener("input",e=>{if(e.target.id==="pagRecebido")calcPag()});const ugPoliticaEstoque=()=>localStorage.getItem('ug_politica_estoque')==='permitir';
@@ -2653,7 +2653,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
  window.addEventListener('message',async event=>{
   if(event.origin!==location.origin||event.data?.type!=='ug_frente_caixa_transfer_v1')return;
   if(!event.source||event.source.closed)return;
-  const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message},location.origin)}catch(e){}};
+  const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message:typeof message==='string'?message:message?.mensagem,recibo:message?.recibo||null},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
   const itens=event.data.items,payments=event.data.pagamentos;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
