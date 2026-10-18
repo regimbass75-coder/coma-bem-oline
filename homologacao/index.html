@@ -1469,7 +1469,7 @@ function htmlReciboVenda(v){
  (d.end?'<div class="rc-center rc-small">'+d.end+'</div>':'')+
  (d.tel?'<div class="rc-center rc-small">'+d.tel+'</div>':'')+
  '<div class="rc-line"></div><div class="rc-center"><b>COMPROVANTE DE VENDA</b><br><span class="rc-small">RECIBO: '+(v.id||"-")+' • '+(v.data||"")+' '+(v.hora||"")+'</span></div>'+
- '<div class="rc-line"></div><div class="rc-row"><b>TIPO</b><b>'+tipo+'</b></div>'+
+ '<div class="rc-line"></div>'+
  (mesa?'<div class="rc-row"><span>MESA</span><b>'+mesa+'</b></div>':'')+
  (comanda?'<div class="rc-row"><span>COMANDA</span><b>'+comanda+'</b></div>':'')+
  '<div class="rc-line"></div><div class="rc-row"><b>CONSUMIDOR</b><b>'+(v.cliente||"NÃO IDENTIFICADO")+'</b></div>'+
@@ -1478,7 +1478,7 @@ function htmlReciboVenda(v){
  '<div class="rc-line"></div><div class="rc-row"><span>TOTAL BRUTO</span><span>'+moeda(v.total)+'</span></div>'+
  '<div class="rc-row rc-total"><span>VALOR TOTAL</span><span>'+moeda(v.total)+'</span></div>'+
  '<div class="rc-line"></div><b>PAGAMENTO</b>'+pg+
- '<div class="rc-line"></div><div class="rc-center"><b>OBRIGADO E VOLTE SEMPRE!</b><br><span class="rc-small">UniGestor Restaurante</span></div></div>';
+ '<div class="rc-line"></div><div class="rc-center"><b>OBRIGADO E VOLTE SEMPRE!</b></div></div>';
 }
 function htmlReciboFrenteCaixa(v){
  const d=dadosEmpresaRecibo(),esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1489,7 +1489,7 @@ function htmlReciboFrenteCaixa(v){
  return '<div class="fc-cupom"><div class="fc-empresa">'+esc(d.emp)+'</div>'+
  (d.end?'<div>'+esc(d.end)+'</div>':'')+(d.cnpj?'<div>CNPJ: '+esc(d.cnpj)+'</div>':'')+(d.ie?'<div>IE: '+esc(d.ie)+'</div>':'')+(d.tel?'<div>FONE: '+esc(d.tel)+'</div>':'')+
  '<div class="fc-line"></div><div class="fc-row fc-strong"><span>RECIBO: '+esc(v.id||'-')+'</span><span>'+data+' '+hora+'</span></div>'+
- '<div>CONSUMIDOR: '+esc(v.cliente||'NÃO IDENTIFICADO')+'</div><div>CPF/CNPJ: __________________</div>'+
+ '<div>CONSUMIDOR: '+esc(v.cliente||'NÃO IDENTIFICADO')+'</div>'+
  '<div class="fc-line"></div><div class="fc-item fc-strong"><span>QTD DESCRIÇÃO</span><span>UNIT.</span><span>TOTAL</span></div><div class="fc-line"></div>'+linhas+
  '<div class="fc-line"></div><div class="fc-row"><span>Total Bruto dos Itens</span><span>'+valor(v.total)+'</span></div>'+
  '<div class="fc-row"><span>Desconto sobre Itens</span><span>'+valor(0)+'</span></div>'+
