@@ -325,7 +325,10 @@ body.login-page,
 <button type="button" data-v="VENDA_CAIXA_FUNCOES">Funções executadas no caixa</button>
 <button type="button" data-v="VENDA_ORCAMENTOS">📋 Orçamentos</button>
 <button type="button" data-v="VENDA_ORDENS_SERVICO">🛠️ Ordens de Serviço</button>
-</div></div><button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button><button data-v="PDV">🛒 PDV</button><button type="button" id="ugAbrirFrenteCaixa">⌨️ PDV Frente de Caixa</button>
+<button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button>
+<button data-v="PDV">🛒 PDV</button>
+<button type="button" id="ugAbrirFrenteCaixa">⌨️ PDV Frente de Caixa</button>
+</div></div>
 
 <button class="menu-group" type="button" onclick="toggleMenu('atendMenu',this)">🍽️ Atendimento <span>▾</span></button>
 <div id="atendMenu" class="submenu hide">
@@ -1602,7 +1605,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function enforce(){
    if(allowed===null)return;
    document.querySelectorAll('nav [data-v]').forEach(el=>{el.hidden=!permitted(el.dataset.v);el.style.display=permitted(el.dataset.v)?'':'none'});
-   const menuGroups={menuVenda:['VENDA_CONSULTA','VENDA_PROMOCOES','VENDA_ACOMPANHAMENTO','VENDA_INDICADORES','VENDA_CAIXA_FUNCOES','VENDA_ORCAMENTOS','VENDA_ORDENS_SERVICO'],
+   const menuGroups={menuVenda:['VENDA_CONSULTA','VENDA_PROMOCOES','VENDA_ACOMPANHAMENTO','VENDA_INDICADORES','VENDA_CAIXA_FUNCOES','VENDA_ORCAMENTOS','VENDA_ORDENS_SERVICO','VENDA_EXTERNA','PDV'],
      atendMenu:['MESAS','COMANDAS','PEDIDOS','COZINHA','RETIRADA'],finMenu:['CAIXA','FINANCEIRO','CONTAS','RELATÓRIOS'],
      cadMenu:['CADASTROS','ESTOQUE','FISCAL','USUARIOS','COMISSOES'],opMenu:['GARCOM','DELIVERY','PRODUCAO','CARDAPIO'],
      gestMenu:['PROPRIETARIO','CONTAS','HISTORICO','FECHAMENTO','AUDITORIA','CANCELAMENTOS'],
