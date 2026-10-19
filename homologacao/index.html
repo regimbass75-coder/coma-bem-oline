@@ -805,7 +805,8 @@ async function ugSalvarPreferenciasEmpresa(cor){
   const r=await fetch('./licenca/api.php?action=company_preferences',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:ugPrefRevision,preferencias:{cor_frente:cor}})});
   const d=await r.json();
   if(r.status===409){alert('A cor foi alterada em outro aparelho. Atualize a página e escolha novamente.');return}
-  if(r.ok&&d.ok)ugPrefRevision=d.revision;
+  if(!r.ok||!d.ok){alert('A cor foi salva somente neste navegador. Não foi possível sincronizar com a empresa: '+(d.erro||'erro '+r.status));return}
+  ugPrefRevision=d.revision;
  }catch(e){}
 }
 function ugAtualizarCorFrente(){const cor=localStorage.getItem('ug_frente_caixa_cor')||'#08628f';const input=document.getElementById('ugCorFrenteInput'),status=document.getElementById('ugCorFrenteStatus');if(input)input.value=cor;if(status)status.textContent='Cor selecionada: '+cor+' — aplicada ao abrir ou atualizar a Frente de Caixa.'}
