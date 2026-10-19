@@ -726,14 +726,19 @@ function addPdv(nome,preco){
 }
 async function delPdv(i){
  const x=pdv[i];if(!x)return;
- const login=prompt('Autorização para cancelar item.\\nLogin do ADMINISTRADOR ou GERENTE:');
- if(login===null)return;
- const senha=prompt('Senha de autorização:');if(senha===null)return;
- let u;try{u=await ugAutorizarOperacao(login,senha)}catch(e){alert('Acesso não autorizado: '+e.message);return}
+ const senha=prompt('Autorização para cancelar item: informe somente a senha do fiscal, gerente ou administrador.');
+ if(senha===null)return;
+ if(!senha.trim())return alert('Informe a senha de autorização.');
+ let u;
+ try{
+  const res=await fetch('./licenca/api.php?action=authorize_password',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha}),cache:'no-store'});
+  const data=await res.json();if(!res.ok||!data.ok)throw Error(data.erro||'Autorização recusada.');u=data.user||{};
+ }catch(e){alert('Acesso não autorizado: '+e.message);return}
+ if(pdv[i]!==x)return alert('O item foi alterado. Repita o cancelamento.');
  const cancelamentos=JSON.parse(localStorage.getItem('cb_hom_cancelamentos')||'[]');
- cancelamentos.unshift({data:new Date().toLocaleString('pt-BR'),produto:x.nome,qtd:x.qtd,usuario:u.name||u.login});
+ cancelamentos.unshift({data:new Date().toLocaleString('pt-BR'),produto:x.nome,qtd:x.qtd,usuario:u.name||u.login||'Fiscal',origem:'PDV Restaurante'});
  localStorage.setItem('cb_hom_cancelamentos',JSON.stringify(cancelamentos));
- auditar('ITEM CANCELADO',x.qtd+'x '+x.nome+' • autorizado por '+(u.name||u.login));
+ auditar('ITEM CANCELADO',x.qtd+'x '+x.nome+' • autorizado por '+(u.name||u.login||'Fiscal'));
  pdv.splice(i,1);salvar();renderCancelamentos();renderPdv();
 }
 function totalPdv(){return pdv.reduce((s,i)=>s+i.preco*i.qtd,0)}function definirTipoVenda(tipo,abrir){
