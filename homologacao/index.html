@@ -782,7 +782,32 @@ function abrirPdvBalcao(){
  localStorage.removeItem("cb_hom_comanda_pdv");
  renderPdv();abrirTela("PDV");setTimeout(()=>document.getElementById("pdvBusca")?.focus(),50);
 }
-function ugSalvarCorFrente(cor){if(!/^#[0-9a-fA-F]{6}$/.test(cor))return;try{localStorage.setItem('ug_frente_caixa_cor',cor);ugAtualizarCorFrente()}catch(e){alert('Não foi possível salvar a cor neste navegador.')}}
+function ugSalvarCorFrente(cor){if(!/^#[0-9a-fA-F]{6}$/.test(cor))return;try{localStorage.setItem('ug_frente_caixa_cor',cor);ugAtualizarCorFrente();ugSalvarPreferenciasEmpresa(cor)}catch(e){alert('Não foi possível salvar a cor neste navegador.')}}
+let ugPrefRevision=null;
+async function ugCarregarPreferenciasEmpresa(){
+ if(!navigator.onLine)return;
+ try{
+  const r=await fetch('./licenca/api.php?action=company_preferences',{credentials:'same-origin',cache:'no-store'});
+  if(!r.ok)return;
+  const d=await r.json();if(!d.ok)return;
+  ugPrefRevision=d.revision;
+  if(d.disponivel&&/^#[0-9a-fA-F]{6}$/.test(d.preferencias?.cor_frente||'')){
+   localStorage.setItem('ug_frente_caixa_cor',d.preferencias.cor_frente);
+   ugAtualizarCorFrente();
+  }
+ }catch(e){}
+}
+async function ugSalvarPreferenciasEmpresa(cor){
+ if(!navigator.onLine)return;
+ try{
+  if(ugPrefRevision===null)await ugCarregarPreferenciasEmpresa();
+  if(ugPrefRevision===null)return;
+  const r=await fetch('./licenca/api.php?action=company_preferences',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:ugPrefRevision,preferencias:{cor_frente:cor}})});
+  const d=await r.json();
+  if(r.status===409){alert('A cor foi alterada em outro aparelho. Atualize a página e escolha novamente.');return}
+  if(r.ok&&d.ok)ugPrefRevision=d.revision;
+ }catch(e){}
+}
 function ugAtualizarCorFrente(){const cor=localStorage.getItem('ug_frente_caixa_cor')||'#08628f';const input=document.getElementById('ugCorFrenteInput'),status=document.getElementById('ugCorFrenteStatus');if(input)input.value=cor;if(status)status.textContent='Cor selecionada: '+cor+' — aplicada ao abrir ou atualizar a Frente de Caixa.'}
 function renderPropagandaFrentePreview(){const box=document.getElementById('frentePropagandaPreview');if(!box)return;const src=localStorage.getItem('ug_frente_caixa_propaganda')||'';box.replaceChildren();if(src){const img=document.createElement('img');img.src=src;img.alt='Propaganda da Frente de Loja';img.style.cssText='max-width:100%;max-height:280px;object-fit:contain;border-radius:8px';box.appendChild(img)}else box.textContent='Nenhuma imagem selecionada.'}
 function carregarPropagandaFrente(event){const file=event?.target?.files?.[0];if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return alert('Use JPG, PNG ou WebP.');if(file.size>1.5*1024*1024)return alert('Use uma imagem menor que 1,5 MB.');const reader=new FileReader();reader.onload=()=>{try{localStorage.setItem('ug_frente_caixa_propaganda',reader.result);renderPropagandaFrentePreview()}catch(e){alert('Não foi possível salvar a imagem neste navegador.')}};reader.readAsDataURL(file)}
@@ -1870,7 +1895,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);ugCarregarPreferenciasEmpresa();return true;}
    }catch(e){}
    return false;
  }
