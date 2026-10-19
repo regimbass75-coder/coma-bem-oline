@@ -152,7 +152,7 @@ if($action==='company_preferences'){
  if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
  $lic=license_for_restaurant($rid);
  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
- if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão.'],403);
+ if($_SERVER['REQUEST_METHOD']==='POST'&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão para alterar preferências.'],403);
  $dir=DATA_DIR.'/empresa-preferencias';$file=$dir.'/'.hash('sha256',$rid).'.json';
  if($_SERVER['REQUEST_METHOD']==='GET'){
   if(!is_file($file))outj(['ok'=>true,'disponivel'=>false,'revision'=>0]);
@@ -189,8 +189,8 @@ if($action==='stock_catalog'){
   if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
   $lic=license_for_restaurant($rid);
   if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
-  if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))
-    outj(['ok'=>false,'erro'=>'Somente gerente ou administrador pode sincronizar o estoque.'],403);
+  if($_SERVER['REQUEST_METHOD']==='POST'&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))
+    outj(['ok'=>false,'erro'=>'Somente gerente ou administrador pode publicar o estoque.'],403);
   $dir=DATA_DIR.'/empresa-estoque';
   $file=$dir.'/'.hash('sha256',$rid).'.json';
   if($_SERVER['REQUEST_METHOD']==='GET'){
