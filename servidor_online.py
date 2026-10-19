@@ -169,7 +169,7 @@ def homolog_master_bridge():
     if not action and (not params['key'] or len(params['key']) > 128):
         return jsonify({'ok': False, 'status': 'SEM_CHAVE'}), 400
     body = request.get_data(cache=False) if request.method == 'POST' else None
-    if body and len(body) > 32768:
+    if body and len(body) > (3000000 if action == 'stock_catalog' else 32768):
         return jsonify({'ok': False, 'erro': 'Requisição muito grande.'}), 413
     headers = {'Accept': 'application/json'}
     if body is not None:
