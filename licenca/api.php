@@ -143,6 +143,52 @@ if($action==='authorize_password'){
   if(!ug_login_rate($rateKey,true))outj(['ok'=>false,'erro'=>'Falha no controle de tentativas.'],503);
   outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
 }
+// Catálogo compartilhado por empresa. Publicação inicial explícita para proteger o estoque local.
+if($action==='stock_catalog'){
+  if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  start_app();
+  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $actor=ug_user_by_session();
+  $rid=(string)($_SESSION['restaurant_id']??'');
+  if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+  $lic=license_for_restaurant($rid);
+  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+  if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))
+    outj(['ok'=>false,'erro'=>'Somente gerente ou administrador pode sincronizar o estoque.'],403);
+  $dir=DATA_DIR.'/empresa-estoque';
+  $file=$dir.'/'.hash('sha256',$rid).'.json';
+  if($_SERVER['REQUEST_METHOD']==='GET'){
+    if(!is_file($file))outj(['ok'=>true,'disponivel'=>false,'produtos'=>[]]);
+    $raw=@file_get_contents($file);
+    if($raw===false)outj(['ok'=>false,'erro'=>'Falha ao ler estoque.'],503);
+    $data=json_decode($raw,true);
+    if(!is_array($data)||!isset($data['produtos'])||!is_array($data['produtos']))outj(['ok'=>false,'erro'=>'Estoque inválido.'],503);
+    outj(['ok'=>true,'disponivel'=>true,'produtos'=>$data['produtos'],'atualizado_em'=>$data['atualizado_em']??null]);
+  }
+  $raw=file_get_contents('php://input');
+  if(strlen($raw)>3000000)outj(['ok'=>false,'erro'=>'Estoque excede limite.'],413);
+  $input=json_decode($raw,true);
+  $produtos=$input['produtos']??null;
+  if(!is_array($produtos)||!array_is_list($produtos)||!count($produtos)||count($produtos)>10000)
+    outj(['ok'=>false,'erro'=>'Informe uma lista não vazia de produtos.'],400);
+  foreach($produtos as $p){
+    if(!is_array($p)||!is_string($p['nome']??null)||trim($p['nome'])===''||strlen($p['nome'])>300)
+      outj(['ok'=>false,'erro'=>'Produto inválido.'],400);
+  }
+  if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+  $fp=@fopen($file,'c+');
+  if(!$fp)outj(['ok'=>false,'erro'=>'Estoque indisponível.'],503);
+  try{
+    if(!flock($fp,LOCK_EX))outj(['ok'=>false,'erro'=>'Falha de bloqueio.'],503);
+    rewind($fp);$old=stream_get_contents($fp);
+    if(trim($old)!==''&&!empty(json_decode($old,true)['produtos']))
+      outj(['ok'=>false,'erro'=>'Já existe estoque no servidor. Publicação inicial bloqueada para evitar sobrescrita.'],409);
+    $encoded=json_encode(['produtos'=>$produtos,'atualizado_em'=>gmdate('c')],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+    rewind($fp);ftruncate($fp,0);fwrite($fp,$encoded);fflush($fp);
+  }finally{flock($fp,LOCK_UN);fclose($fp);}
+  outj(['ok'=>true,'quantidade'=>count($produtos)]);
+}
 // Backup individual de vendas da empresa autenticada.
 // O backup administrativo geral permanece exclusivo do Painel Master.
 if($action==='company_backup'){
