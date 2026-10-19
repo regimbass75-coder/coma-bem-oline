@@ -161,7 +161,13 @@ async function ugSincronizarCatalogoCaixa(){
   const padrao=local.length===3&&['Hambúrguer','Refrigerante','Pizza'].every(n=>local.some(p=>p.nome===n));
   if(vazio||padrao){
    localStorage.setItem('cb_hom_estoque',JSON.stringify(d.produtos));
+  }else{
+   const precos=new Map(d.produtos.map(p=>[String(p.nome||'').toLowerCase(),p.preco]));
+   let mudou=false;
+   for(const p of local){const novo=precos.get(String(p.nome||'').toLowerCase());if(novo!==undefined&&Number.isFinite(Number(novo))&&Number(p.preco)!==Number(novo)){p.preco=novo;mudou=true}}
+   if(mudou)localStorage.setItem('cb_hom_estoque',JSON.stringify(local));
   }
+  render();
  }catch(e){}
 }
 ugSincronizarCatalogoCaixa();
