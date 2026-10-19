@@ -143,6 +143,41 @@ if($action==='authorize_password'){
   if(!ug_login_rate($rateKey,true))outj(['ok'=>false,'erro'=>'Falha no controle de tentativas.'],503);
   outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
 }
+// Preferências compartilhadas por empresa, com revisão para evitar perda por concorrência.
+if($action==='company_preferences'){
+ if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão.'],403);
+ $dir=DATA_DIR.'/empresa-preferencias';$file=$dir.'/'.hash('sha256',$rid).'.json';
+ if($_SERVER['REQUEST_METHOD']==='GET'){
+  if(!is_file($file))outj(['ok'=>true,'disponivel'=>false,'revision'=>0]);
+  $d=json_decode((string)@file_get_contents($file),true);
+  if(!is_array($d))outj(['ok'=>false,'erro'=>'Preferências indisponíveis.'],503);
+  outj(['ok'=>true,'disponivel'=>true,'revision'=>$d['revision']??0,'preferencias'=>$d['preferencias']??[]]);
+ }
+ $input=json_decode((string)file_get_contents('php://input'),true);
+ $color=$input['preferencias']['cor_frente']??null;
+ if(!is_string($color)||!preg_match('/^#[0-9a-fA-F]{6}$/D',$color))outj(['ok'=>false,'erro'=>'Cor inválida.'],400);
+ $expected=$input['revision']??null;
+ if(!is_int($expected)||$expected<0)outj(['ok'=>false,'erro'=>'Revisão obrigatória.'],400);
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ $fp=@fopen($file,'c+');if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ try{
+  if(!flock($fp,LOCK_EX))outj(['ok'=>false,'erro'=>'Bloqueio indisponível.'],503);
+  rewind($fp);$old=stream_get_contents($fp);$current=$old?json_decode($old,true):[];
+  $revision=(int)($current['revision']??0);
+  if($revision!==$expected)outj(['ok'=>false,'erro'=>'Preferências alteradas em outro aparelho. Atualize antes de salvar.','revision'=>$revision],409);
+  $data=['revision'=>$revision+1,'preferencias'=>['cor_frente'=>$color],'atualizado_em'=>gmdate('c')];
+  $encoded=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  rewind($fp);ftruncate($fp,0);fwrite($fp,$encoded);fflush($fp);
+ }finally{flock($fp,LOCK_UN);fclose($fp);}
+ outj(['ok'=>true,'revision'=>$revision+1]);
+}
 // Catálogo compartilhado por empresa. Publicação inicial explícita para proteger o estoque local.
 if($action==='stock_catalog'){
   if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
