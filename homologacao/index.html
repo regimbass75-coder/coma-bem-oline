@@ -706,9 +706,23 @@ function salvarInterno(){localStorage.setItem("cb_hom_config",JSON.stringify(con
 
 async function ugEnviarPrecoEmpresa(nome,preco){
  if(!navigator.onLine){ugStatusEstoque('Preço alterado apenas neste aparelho (sem internet).');return}
- try{
-  const r=await fetch('./licenca/api.php?action=stock_price',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,preco})});
+ const api='./licenca/api.php';
+ const atualizar=async()=>{
+  const r=await fetch(api+'?action=stock_price',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome,preco})});
   const d=await r.json();
+  return {r,d};
+ };
+ try{
+  let {r,d}=await atualizar();
+  if(r.status===409&&String(d.erro||'').includes('Publique o catálogo')){
+   if(!Array.isArray(estoque)||!estoque.length)throw Error('Não há produtos para iniciar o catálogo.');
+   ugStatusEstoque('Criando catálogo compartilhado da empresa...');
+   const pub=await fetch(api+'?action=stock_catalog',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({produtos:estoque})});
+   const resultado=await pub.json();
+   // Outra sessão pode ter publicado primeiro. Nesse caso, tente atualizar o preço pontualmente.
+   if(!pub.ok&&pub.status!==409)throw Error(resultado.erro||'Falha ao publicar catálogo (HTTP '+pub.status+').');
+   ({r,d}=await atualizar());
+  }
   if(!r.ok||!d.ok)throw Error(d.erro||'HTTP '+r.status);
   ugStatusEstoque('Preço de '+nome+' sincronizado: R$ '+Number(preco).toFixed(2).replace('.',','));
  }catch(e){ugStatusEstoque('Preço salvo localmente, mas NÃO sincronizado: '+e.message);alert('Preço salvo neste navegador, mas não chegou aos outros aparelhos: '+e.message)}
