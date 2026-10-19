@@ -719,17 +719,17 @@ async function ugBaixarEstoqueEmpresa(manual){
  if(!navigator.onLine)return;
  try{
   const r=await fetch('./licenca/api.php?action=stock_catalog',{credentials:'same-origin',cache:'no-store'});
-  if(!r.ok){if(manual)throw Error('Sessão indisponível ou acesso negado ('+r.status+').');return}
-  const d=await r.json();if(!d.ok||!d.disponivel||!Array.isArray(d.produtos)||!d.produtos.length){if(manual)alert('Ainda não existe estoque publicado para esta empresa. Publique primeiro pelo Edge.');return}
+  if(!r.ok){ugStatusEstoque('Falha de sincronização do estoque: HTTP '+r.status);if(manual)throw Error('Sessão indisponível ou acesso negado ('+r.status+').');return}
+  const d=await r.json();if(!d.ok||!d.disponivel||!Array.isArray(d.produtos)||!d.produtos.length){ugStatusEstoque('Nenhum catálogo publicado para esta empresa no servidor.');if(manual)alert('Ainda não existe estoque publicado para esta empresa. Publique primeiro pelo Edge.');return}
   const igual=JSON.stringify(estoque)===JSON.stringify(d.produtos);
   if(igual){ugStatusEstoque('Estoque atualizado: '+estoque.length+' produtos.');return}
   const padrao=estoque.length===3&&['Hambúrguer','Refrigerante','Pizza'].every(n=>estoque.some(p=>p.nome===n));
-  if(!manual&&!padrao)return;
+  if(!manual&&!padrao){ugStatusEstoque('Estoque do servidor disponível ('+d.produtos.length+' produtos), mas há dados locais diferentes. Use Carregar estoque da empresa após fazer backup.');return;}
   if(!padrao&&!confirm('Este navegador possui '+estoque.length+' produtos locais. Carregar '+d.produtos.length+' produtos do servidor substituirá somente o estoque local deste navegador. Faça backup antes de continuar.'))return;
   estoque=d.produtos;localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque));
   renderEstoque();renderPdv();renderBuscaPdv();ugStatusEstoque('Carregados '+estoque.length+' produtos da empresa.');
   if(manual)alert('Produtos carregados. O PDV e a busca de preços já podem utilizar este estoque.');
- }catch(e){if(manual){ugStatusEstoque(e.message);alert('Não foi possível carregar o estoque: '+e.message)}}
+ }catch(e){ugStatusEstoque('Erro de conexão do estoque: '+e.message);if(manual){alert('Não foi possível carregar o estoque: '+e.message)}}
 }
 function produtosBusca(q){q=String(q||"").trim().toLowerCase();return estoque.filter(x=>!q||String(x.nome||"").toLowerCase().includes(q)||String(x.codigo||"").toLowerCase()===q||String(x.barras||"").toLowerCase()===q)}
 function selecionarProdutoPdv(nome){let p=estoque.find(x=>x.nome===nome),box=document.getElementById("pdvProdutoInfo");if(!p)return;pdvSelecionadoNome=p.nome;if(box)box.innerHTML="<b>"+p.nome+"</b><p class=\"total\">"+moeda(p.preco)+"</p><p class=\"muted\">Estoque disponível: "+p.qtd+"</p>";let i=document.getElementById("pdvBuscaInfo");if(i)i.textContent="Produto localizado."}
