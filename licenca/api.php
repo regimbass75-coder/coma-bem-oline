@@ -224,6 +224,34 @@ if($action==='stock_catalog'){
   }finally{flock($fp,LOCK_UN);fclose($fp);}
   outj(['ok'=>true,'quantidade'=>count($produtos)]);
 }
+// Atualização pontual de preço: não substitui quantidades nem outros produtos.
+if($action==='stock_price'){
+ if(!in_array($_SERVER['REQUEST_METHOD'],['POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão para alterar preço.'],403);
+ $in=json_decode((string)file_get_contents('php://input'),true);
+ $nome=trim((string)($in['nome']??''));$preco=$in['preco']??null;
+ if($nome===''||strlen($nome)>300||!is_numeric($preco)||!is_finite((float)$preco)||(float)$preco<=0)outj(['ok'=>false,'erro'=>'Produto ou preço inválido.'],400);
+ $file=DATA_DIR.'/empresa-estoque/'.hash('sha256',$rid).'.json';
+ $fp=@fopen($file,'r+');if(!$fp)outj(['ok'=>false,'erro'=>'Publique o catálogo da empresa antes de sincronizar preços.'],409);
+ try{
+  if(!flock($fp,LOCK_EX))outj(['ok'=>false,'erro'=>'Bloqueio indisponível.'],503);
+  rewind($fp);$d=json_decode((string)stream_get_contents($fp),true);
+  if(!is_array($d)||!is_array($d['produtos']??null))outj(['ok'=>false,'erro'=>'Catálogo inválido.'],503);
+  $matches=0;
+  foreach($d['produtos'] as &$p){if(is_array($p)&&mb_strtolower((string)($p['nome']??''))===mb_strtolower($nome)){$p['preco']=(float)$preco;$matches++;}}unset($p);
+  if($matches!==1)outj(['ok'=>false,'erro'=>'Produto não localizado de forma única no catálogo publicado.'],409);
+  $d['atualizado_em']=gmdate('c');
+  $encoded=json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  rewind($fp);ftruncate($fp,0);fwrite($fp,$encoded);fflush($fp);
+ }finally{flock($fp,LOCK_UN);fclose($fp);}
+ outj(['ok'=>true,'preco'=>(float)$preco]);
+}
 // Backup individual de vendas da empresa autenticada.
 // O backup administrativo geral permanece exclusivo do Painel Master.
 if($action==='company_backup'){
