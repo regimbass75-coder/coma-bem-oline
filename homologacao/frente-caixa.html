@@ -149,6 +149,24 @@ async function ugSincronizarCorFrente(){
  }catch(e){}
 }
 ugSincronizarCorFrente();
+async function ugSincronizarCatalogoCaixa(){
+ if(!navigator.onLine)return;
+ try{
+  const r=await fetch('./licenca/api.php?action=stock_catalog',{credentials:'same-origin',cache:'no-store'});
+  if(!r.ok)return;
+  const d=await r.json();
+  if(!d.ok||!d.disponivel||!Array.isArray(d.produtos)||!d.produtos.length)return;
+  const local=JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]');
+  const vazio=local.length===0;
+  const padrao=local.length===3&&['Hambúrguer','Refrigerante','Pizza'].every(n=>local.some(p=>p.nome===n));
+  if(vazio||padrao){
+   localStorage.setItem('cb_hom_estoque',JSON.stringify(d.produtos));
+  }
+ }catch(e){}
+}
+ugSincronizarCatalogoCaixa();
+window.addEventListener('focus',ugSincronizarCatalogoCaixa);
+window.addEventListener('online',ugSincronizarCatalogoCaixa);
 window.addEventListener('focus',ugSincronizarCorFrente);
 window.addEventListener('online',ugSincronizarCorFrente);
 window.addEventListener('storage',e=>{if(e.key===ugCorFrenteKey)ugAplicarCorFrente()});const adKey='ug_frente_caixa_propaganda';function setAd(src){$('propagandaImagem').hidden=!src;$('propagandaPlaceholder').hidden=!!src;if(src)$('propagandaImagem').src=src;else $('propagandaImagem').removeAttribute('src')}try{setAd(localStorage.getItem(adKey))}catch(e){setAd(null)}window.addEventListener('storage',e=>{if(e.key===adKey)setAd(e.newValue)});const cfgKey='ug_frente_caixa_dispositivos';const cfgIds=['cfgImpressora','cfgPapel','cfgGaveta','cfgBalanca','cfgConexao','cfgUnidade'];function clockPdv(){$('dataHoraPdv').textContent=new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'})}clockPdv();setInterval(clockPdv,1000);function fecharCfg(){$('configLogin').hidden=true;$('configPainel').hidden=true;$('configSenha').value='';$('codigo').focus()}$('configPdv').onclick=()=>{$('configErro').textContent='';$('configLogin').hidden=false;$('configUsuario').focus()};$('configCancelar').onclick=fecharCfg;$('cfgFechar').onclick=fecharCfg;$('configEntrar').onclick=async()=>{const login=$('configUsuario').value.trim(),senha=$('configSenha').value;if(!login||!senha){$('configErro').textContent='Informe usuário e senha.';return}const btn=$('configEntrar');btn.disabled=true;$('configErro').textContent='Validando acesso…';try{const data=await new Promise((resolve,reject)=>{if(!window.opener||window.opener.closed)return reject(Error('Abra o PDV pelo UniGestor principal.'));const id='cfg-'+Date.now()+'-'+Math.random().toString(36).slice(2);const timeout=setTimeout(()=>{window.removeEventListener('message',receive);reject(Error('O UniGestor não respondeu.'))},10000);function receive(ev){if(ev.origin!==location.origin||ev.source!==window.opener||ev.data?.type!=='ug_config_auth_result'||ev.data.id!==id)return;clearTimeout(timeout);window.removeEventListener('message',receive);resolve(ev.data)}window.addEventListener('message',receive);window.opener.postMessage({type:'ug_config_auth_request',id,login,senha},location.origin)});if(!data.ok)throw Error(data.erro||'Credenciais inválidas.');$('configSenha').value='';$('configLogin').hidden=true;let saved={};try{saved=JSON.parse(localStorage.getItem(cfgKey)||'{}')}catch(e){}const popup=window.open('','ug_configuracoes','width=720,height=800,resizable=yes,scrollbars=yes');if(!popup)throw Error('Permita janelas pop-up para abrir as configurações.');const painel=$('configPainel').querySelector('.dialog').cloneNode(true);popup.document.open();popup.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Configurações • UniGestor</title><style>body{font:16px Arial;background:#edf3fa;color:#12365c;padding:25px}main{max-width:640px;margin:auto;background:white;padding:25px;border-radius:12px;box-shadow:0 8px 30px #1233}label{display:block;margin:14px 0}input,select{width:100%;padding:12px;font-size:16px;box-sizing:border-box}button{background:#18518f;color:white;border:0;border-radius:6px;padding:12px;margin-right:8px;cursor:pointer}.small{color:#596e83;font-size:13px}.actions{margin-top:18px}</style></head><body><main></main></body></html>');popup.document.close();popup.document.querySelector('main').appendChild(painel);const get=id=>popup.document.getElementById(id);
