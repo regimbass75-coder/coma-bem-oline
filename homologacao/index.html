@@ -2815,6 +2815,11 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
     selCredito.value=String(clienteIdx);
    }
    if(clienteSel&&clienteIdx!==''&&clienteIdx!=null&&[...clienteSel.options].some(o=>o.value===String(clienteIdx)))clienteSel.value=String(clienteIdx);
+   if(creditoTransferido>0){
+    const c=clientes[Number(clienteIdx)];
+    if(!c||saldoCreditoCliente(c)+0.001<creditoTransferido)throw Error('Limite do cliente insuficiente para o crediário.');
+    if(document.getElementById('pagClienteCredito')?.value!==String(clienteIdx))throw Error('Seleção de cliente do crediário não confirmada.');
+   }
    window.__ugFrenteCaixaReply=reply;window.__ugFrenteCaixaSilent=true;
    await confirmarPagamento();
    if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Finalização não confirmada. Confira o PDV principal.');}
