@@ -344,6 +344,45 @@ if(in_array($action,['customers_list','customers_save','customers_delete'],true)
   flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'customers'=>$rows]);
  }catch(Throwable $e){error_log('[UniGestor] clientes: '.$e->getMessage());if(is_resource($fp))fclose($fp);outj(['ok'=>false,'erro'=>'Falha no cadastro central.'],503);}
 }
+// Baixas do crediário: livro central por empresa e venda, com idempotência.
+if(in_array($action,['credit_receipts_list','credit_receipt_pay'],true)){
+ start_app();
+ if(!ug_session_valid())outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['Financeiro','Caixa','PDV/Vendas'],$perms)&&!in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão financeira.'],403);
+ ensure_data();$dir=DATA_DIR.'/empresa-recebimentos';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ try{
+  if(!flock($fp,LOCK_EX))throw new RuntimeException('lock');
+  rewind($fp);$raw=stream_get_contents($fp);$rows=$raw?json_decode($raw,true):[];
+  if(!is_array($rows)||!array_is_list($rows))throw new RuntimeException('invalid ledger');
+  if($action==='credit_receipts_list'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'receipts'=>$rows,'restaurant_id'=>$rid]);}
+  if(($_SERVER['REQUEST_METHOD']??'')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  $payload=file_get_contents('php://input');if(strlen($payload)>2048)outj(['ok'=>false,'erro'=>'Dados excedem limite.'],413);
+  $data=json_decode($payload,true);if(!is_array($data))outj(['ok'=>false,'erro'=>'Dados inválidos.'],400);
+  $saleId=(string)($data['sale_id']??'');$receiptId=(string)($data['receipt_id']??'');
+  if(!preg_match('/^[a-zA-Z0-9_-]{5,100}$/D',$saleId)||!preg_match('/^[a-zA-Z0-9_-]{8,100}$/D',$receiptId))outj(['ok'=>false,'erro'=>'Identificador inválido.'],400);
+  foreach($rows as $p)if(($p['id']??'')===$receiptId){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'duplicate'=>true,'receipts'=>$rows]);}
+  $saleFile=DATA_DIR.'/empresa-vendas/'.hash('sha256',$rid).'.json';
+  $sales=is_file($saleFile)?json_decode(file_get_contents($saleFile),true):[];
+  $sale=null;foreach(($sales?:[]) as $v)if(($v['id']??'')===$saleId){$sale=$v;break;}
+  if(!$sale)outj(['ok'=>false,'erro'=>'Venda não encontrada no servidor.'],404);
+  $total=0;foreach(($sale['pagamentos']??[]) as $p)if(($p['forma']??'')==='CREDITO_LOJA')$total+=(float)($p['valor']??0);
+  $paid=0;foreach($rows as $p)if(($p['sale_id']??'')===$saleId)$paid+=(float)($p['amount']??0);
+  $amount=round((float)($data['amount']??0),2);
+  if($amount<=0||$amount>round($total-$paid,2)+0.001)outj(['ok'=>false,'erro'=>'Valor maior que saldo aberto ou inválido.'],409);
+  $rows[]=['id'=>$receiptId,'sale_id'=>$saleId,'amount'=>$amount,'created_at'=>date('c'),'operator_id'=>(string)$actor['id']];
+  $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp))throw new RuntimeException('write');
+  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'receipts'=>$rows]);
+ }catch(Throwable $e){error_log('[UniGestor] baixa de crédito: '.$e->getMessage());if(is_resource($fp))fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao gravar recebimento.'],503);}
+}
 // Registro central de vendas: um arquivo independente por empresa, com trava
 // exclusiva e identificador idempotente. Nunca aceita restaurant_id do navegador.
 if(in_array($action,['sales_list','sales_create'],true)){
