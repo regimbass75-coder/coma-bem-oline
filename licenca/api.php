@@ -304,6 +304,46 @@ if($action==='company_backup'){
   finally{@unlink($temp);}
   exit;
 }
+// Cadastro de clientes por empresa, isolado e protegido por sessao.
+if(in_array($action,['customers_list','customers_save','customers_delete'],true)){
+ start_app();
+ try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['PDV/Vendas','Caixa','Clientes'],$perms)&&!in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão.'],403);
+ ensure_data();$dir=DATA_DIR.'/empresa-clientes';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ try{
+  if(!flock($fp,LOCK_EX))throw new RuntimeException('lock');
+  rewind($fp);$raw=stream_get_contents($fp);$rows=$raw?json_decode($raw,true):[];
+  if(!is_array($rows)||!array_is_list($rows))throw new RuntimeException('dados inválidos');
+  if($action==='customers_list'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'customers'=>$rows,'restaurant_id'=>$rid]);}
+  if(($_SERVER['REQUEST_METHOD']??'')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  $body=file_get_contents('php://input');if(strlen($body)>8192)outj(['ok'=>false,'erro'=>'Dados excedem limite.'],413);
+  $data=json_decode($body,true);if(!is_array($data))outj(['ok'=>false,'erro'=>'Dados inválidos.'],400);
+  $id=trim((string)($data['id']??''));
+  if(!preg_match('/^[a-zA-Z0-9_-]{6,100}$/D',$id))outj(['ok'=>false,'erro'=>'Identificador inválido.'],400);
+  $found=-1;foreach($rows as $i=>$c)if(($c['id']??'')===$id){$found=$i;break;}
+  if($action==='customers_delete'){
+   if($found>=0)array_splice($rows,$found,1);
+  }else{
+   $nome=trim((string)($data['nome']??''));
+   $limite=(float)($data['creditoLimite']??0);
+   if($nome===''||mb_strlen($nome)>160||!is_finite($limite)||$limite<0||$limite>10000000)outj(['ok'=>false,'erro'=>'Nome ou limite inválido.'],400);
+   $item=['id'=>$id,'nome'=>$nome,'telefone'=>substr((string)($data['telefone']??''),0,80),'endereco'=>substr((string)($data['endereco']??''),0,300),'cpf'=>substr((string)($data['cpf']??''),0,32),'creditoLimite'=>round($limite,2),'ativo'=>($data['ativo']??true)!==false];
+   if($found>=0)$rows[$found]=$item;else $rows[]=$item;
+  }
+  $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp))throw new RuntimeException('write');
+  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'customers'=>$rows]);
+ }catch(Throwable $e){error_log('[UniGestor] clientes: '.$e->getMessage());if(is_resource($fp))fclose($fp);outj(['ok'=>false,'erro'=>'Falha no cadastro central.'],503);}
+}
 // Registro central de vendas: um arquivo independente por empresa, com trava
 // exclusiva e identificador idempotente. Nunca aceita restaurant_id do navegador.
 if(in_array($action,['sales_list','sales_create'],true)){
