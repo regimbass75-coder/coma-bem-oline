@@ -137,13 +137,14 @@ function refreshClients(){let prev=$('cliente').value;let list=[];try{list=JSON.
 
 // F10: seleção de cliente sem alterar o carrinho nem os atalhos existentes.
 function ugClientesDisponiveis(){try{const a=JSON.parse(localStorage.getItem('cb_hom_clientes')||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
-function ugAbrirClienteF10(){refreshClients();$('ugClienteF10').hidden=false;$('ugClientePesquisa').value='';ugRenderClientesF10();$('ugClientePesquisa').focus()}
+let ugClienteSelecionadoF10=0;
+function ugAbrirClienteF10(){refreshClients();ugClienteSelecionadoF10=0;$('ugClienteF10').hidden=false;$('ugClientePesquisa').value='';ugRenderClientesF10();$('ugClientePesquisa').focus()}
 function ugFecharClienteF10(){$('ugClienteF10').hidden=true;$('codigo').focus()}
 function ugRenderClientesF10(){
  const q=$('ugClientePesquisa').value.trim().toLocaleLowerCase('pt-BR'),clientes=ugClientesDisponiveis(),box=$('ugClienteResultados');box.replaceChildren();
- const matches=clientes.map((c,i)=>({c,i})).filter(({c})=>!q||String(c.nome||'').toLocaleLowerCase('pt-BR').includes(q)||String(c.cpf||'').replace(/\D/g,'').includes(q.replace(/\D/g,''))).slice(0,60);
+ const matches=clientes.map((c,i)=>({c,i})).filter(({c})=>!q||String(c.nome||'').toLocaleLowerCase('pt-BR').includes(q)||String(c.cpf||'').replace(/\D/g,'').includes(q.replace(/\D/g,''))).slice(0,60);ugClienteSelecionadoF10=Math.max(0,Math.min(ugClienteSelecionadoF10,matches.length-1));
  if(!matches.length){box.textContent='Nenhum cliente encontrado. Cadastre o cliente no UniGestor principal.';return}
- for(const {c,i} of matches){const b=document.createElement('button');b.type='button';b.style.cssText='display:block;width:100%;text-align:left;padding:12px;margin:4px 0;border:1px solid #ccd7e4;border-radius:8px;background:white;cursor:pointer';b.textContent=String(c.nome||'Cliente')+(c.cpf?' • CPF: '+String(c.cpf):'')+' • Limite: '+money(Number(c.creditoLimite)||0)+' • Dívida: '+money(Number(c.creditoUsado)||0)+' • Disponível: '+money(Math.max(0,(Number(c.creditoLimite)||0)-(Number(c.creditoUsado)||0)))+' • Situação: '+(c.ativo===false||c.ativo==='false'?'INATIVO':c.ativo===true||c.ativo==='true'?'ATIVO':'Não informado');b.onclick=()=>{$('cliente').value=String(i);ugAtualizarClienteF10();ugFecharClienteF10()};box.appendChild(b)}
+ for(const [pos,{c,i}] of matches.entries()){const b=document.createElement('button');b.dataset.ugClienteIndex=String(i);b.dataset.ugPos=String(pos);b.type='button';b.style.cssText='display:block;width:100%;text-align:left;padding:12px;margin:4px 0;border:1px solid #ccd7e4;border-radius:8px;background:white;cursor:pointer';b.textContent=String(c.nome||'Cliente')+(c.cpf?' • CPF: '+String(c.cpf):'')+' • Limite: '+money(Number(c.creditoLimite)||0)+' • Dívida: '+money(Number(c.creditoUsado)||0)+' • Disponível: '+money(Math.max(0,(Number(c.creditoLimite)||0)-(Number(c.creditoUsado)||0)))+' • Situação: '+(c.ativo===false||c.ativo==='false'?'INATIVO':c.ativo===true||c.ativo==='true'?'ATIVO':'Não informado');b.onclick=()=>{$('cliente').value=String(i);ugAtualizarClienteF10();ugFecharClienteF10()};b.style.background=pos===ugClienteSelecionadoF10?'#dbeafe':'white';box.appendChild(b)}
 }
 function ugAtualizarClienteF10(){
  const i=$('cliente').value,c=i!==''?ugClientesDisponiveis()[Number(i)]:null,el=$('ugClienteCreditoInfo');
@@ -152,7 +153,8 @@ function ugAtualizarClienteF10(){
  el.textContent='Cliente: '+String(c.nome||'Cliente')+' • Situação: '+ativo+' • Limite: '+money(limite)+' • Em aberto: '+money(divida)+' • Disponível: '+money(Math.max(0,limite-divida));
 }
 
-$('ugClientePesquisa').addEventListener('input',ugRenderClientesF10);
+$('ugClientePesquisa').addEventListener('input',()=>{ugClienteSelecionadoF10=0;ugRenderClientesF10()});
+$('ugClientePesquisa').addEventListener('keydown',e=>{const botoes=Array.from($('ugClienteResultados').querySelectorAll('button[data-ug-cliente-index],button[data-ug-pos]'));if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!botoes.length)return;ugClienteSelecionadoF10=(ugClienteSelecionadoF10+(e.key==='ArrowDown'?1:-1)+botoes.length)%botoes.length;ugRenderClientesF10();$('ugClienteResultados').querySelectorAll('button')[ugClienteSelecionadoF10]?.scrollIntoView({block:'nearest'})}else if(e.key==='Enter'){e.preventDefault();botoes[ugClienteSelecionadoF10]?.click()}});
 $('ugClienteFechar').onclick=ugFecharClienteF10;
 function refreshOperator(){let name='Não identificado';try{const u=window.opener?.__cbUsuarioLogado;if(u)name=u.name||u.nome||u.login||name;else{let o=JSON.parse(sessionStorage.getItem('comabem_session_user')||'null');name=o?.nome||o?.login||name}}catch(e){}$('operador').textContent='Operador: '+name;$('atendidoPor').textContent='Atendido por: '+name}
 $('fecharAjuda').onclick=()=>{$('ajuda').hidden=true;$('codigo').focus()};
