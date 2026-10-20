@@ -143,14 +143,15 @@ function ugRenderClientesF10(){
  const q=$('ugClientePesquisa').value.trim().toLocaleLowerCase('pt-BR'),clientes=ugClientesDisponiveis(),box=$('ugClienteResultados');box.replaceChildren();
  const matches=clientes.map((c,i)=>({c,i})).filter(({c})=>!q||String(c.nome||'').toLocaleLowerCase('pt-BR').includes(q)||String(c.cpf||'').replace(/\D/g,'').includes(q.replace(/\D/g,''))).slice(0,60);
  if(!matches.length){box.textContent='Nenhum cliente encontrado. Cadastre o cliente no UniGestor principal.';return}
- for(const {c,i} of matches){const b=document.createElement('button');b.type='button';b.style.cssText='display:block;width:100%;text-align:left;padding:12px;margin:4px 0;border:1px solid #ccd7e4;border-radius:8px;background:white;cursor:pointer';b.textContent=String(c.nome||'Cliente')+(c.cpf?' • CPF: '+String(c.cpf):'');b.onclick=()=>{$('cliente').value=String(i);ugAtualizarClienteF10();ugFecharClienteF10()};box.appendChild(b)}
+ for(const {c,i} of matches){const b=document.createElement('button');b.type='button';b.style.cssText='display:block;width:100%;text-align:left;padding:12px;margin:4px 0;border:1px solid #ccd7e4;border-radius:8px;background:white;cursor:pointer';b.textContent=String(c.nome||'Cliente')+(c.cpf?' • CPF: '+String(c.cpf):'')+' • Limite: '+money(Number(c.creditoLimite)||0)+' • Dívida: '+money(Number(c.creditoUsado)||0)+' • Disponível: '+money(Math.max(0,(Number(c.creditoLimite)||0)-(Number(c.creditoUsado)||0)))+' • Situação: '+(c.ativo===false||c.ativo==='false'?'INATIVO':c.ativo===true||c.ativo==='true'?'ATIVO':'Não informado');b.onclick=()=>{$('cliente').value=String(i);ugAtualizarClienteF10();ugFecharClienteF10()};box.appendChild(b)}
 }
 function ugAtualizarClienteF10(){
- const i=$('cliente').value,c=ugClientesDisponiveis()[Number(i)],el=$('ugClienteCreditoInfo');
- if(!i||!c){el.textContent='Nenhum cliente selecionado.';return}
- const limite=Number(c.limite_credito??c.limiteCredito),divida=Number(c.saldo_devedor??c.divida_atual);
- el.textContent='Cliente selecionado: '+String(c.nome||'Cliente')+'. '+(Number.isFinite(limite)&&Number.isFinite(divida)?'Limite: '+money(limite)+' • Dívida: '+money(divida)+' • Disponível: '+money(Math.max(0,limite-divida)):'Limite e dívida não disponíveis neste cadastro. Consulte a conta corrente no sistema principal.');
+ const i=$('cliente').value,c=i!==''?ugClientesDisponiveis()[Number(i)]:null,el=$('ugClienteCreditoInfo');
+ if(!c){el.textContent='Nenhum cliente selecionado.';return}
+ const limite=Number(c.creditoLimite??0),divida=Number(c.creditoUsado??0),ativo=c.ativo===false||c.ativo==='false'?'INATIVO':c.ativo===true||c.ativo==='true'?'ATIVO':'Não informado';
+ el.textContent='Cliente: '+String(c.nome||'Cliente')+' • Situação: '+ativo+' • Limite: '+money(limite)+' • Em aberto: '+money(divida)+' • Disponível: '+money(Math.max(0,limite-divida));
 }
+
 $('ugClientePesquisa').addEventListener('input',ugRenderClientesF10);
 $('ugClienteFechar').onclick=ugFecharClienteF10;
 function refreshOperator(){let name='Não identificado';try{const u=window.opener?.__cbUsuarioLogado;if(u)name=u.name||u.nome||u.login||name;else{let o=JSON.parse(sessionStorage.getItem('comabem_session_user')||'null');name=o?.nome||o?.login||name}}catch(e){}$('operador').textContent='Operador: '+name;$('atendidoPor').textContent='Atendido por: '+name}
