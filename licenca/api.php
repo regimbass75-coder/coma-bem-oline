@@ -335,7 +335,7 @@ if(in_array($action,['customers_list','customers_save','customers_delete'],true)
   }else{
    $nome=trim((string)($data['nome']??''));
    $limite=(float)($data['creditoLimite']??0);
-   if($nome===''||mb_strlen($nome)>160||!is_finite($limite)||$limite<0||$limite>10000000)outj(['ok'=>false,'erro'=>'Nome ou limite inválido.'],400);
+   if($nome===''||strlen($nome)>320||!is_finite($limite)||$limite<0||$limite>10000000)outj(['ok'=>false,'erro'=>'Nome ou limite inválido.'],400);
    $item=['id'=>$id,'nome'=>$nome,'telefone'=>substr((string)($data['telefone']??''),0,80),'endereco'=>substr((string)($data['endereco']??''),0,300),'cpf'=>substr((string)($data['cpf']??''),0,32),'creditoLimite'=>round($limite,2),'ativo'=>($data['ativo']??true)!==false];
    if($found>=0)$rows[$found]=$item;else $rows[]=$item;
   }
