@@ -159,11 +159,11 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'orders_list', 'orders_upsert', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'customers_list', 'customers_save', 'customers_delete', 'authorize', 'authorize_password'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'orders_list', 'orders_upsert', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
-    if action in ('login', 'logout', 'users_create', 'users_update', 'sales_create', 'orders_upsert', 'authorize', 'authorize_password', 'stock_price', 'customers_save', 'customers_delete') and request.method != 'POST':
+    if action in ('login', 'logout', 'users_create', 'users_update', 'sales_create', 'orders_upsert', 'authorize', 'authorize_password', 'stock_price', 'customers_save', 'customers_delete', 'credit_receipt_pay') and request.method != 'POST':
         return jsonify({'ok': False, 'erro': 'Use POST.'}), 405
-    if action in ('', 'me', 'users_list', 'sales_list', 'orders_list', 'company_backup', 'customers_list') and request.method != 'GET':
+    if action in ('', 'me', 'users_list', 'sales_list', 'orders_list', 'company_backup', 'customers_list', 'credit_receipts_list') and request.method != 'GET':
         return jsonify({'ok': False, 'erro': 'Use GET.'}), 405
     params = {'action': action} if action else {'key': (request.args.get('key') or '').strip().upper()}
     if not action and (not params['key'] or len(params['key']) > 128):
