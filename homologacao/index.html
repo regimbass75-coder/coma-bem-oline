@@ -1012,7 +1012,7 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  venda.cliente=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?clientes[Number(clienteVendaIdx)].nome:"";
  venda.clienteId=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?Number(clienteVendaIdx):null;
  if(creditoPag>0&&clienteCreditoIdx!==""){venda.cliente=clientes[Number(clienteCreditoIdx)].nome;venda.clienteId=Number(clienteCreditoIdx);venda.clienteUid=ugClienteId(clientes[Number(clienteCreditoIdx)]);}
- if(creditoPag>0){let cc=clientes[Number(clienteCreditoIdx)];cc.creditoUsado=creditoCliente(cc)+creditoPag;contas.unshift({tipo:"RECEBER",descricao:"Crédito da loja - "+cc.nome+" - "+vendaId,cliente:cc.nome,clienteId:Number(clienteCreditoIdx),valor:creditoPag,vencimento:new Date().toISOString().slice(0,10),status:"ABERTA",vendaId:vendaId,criado_em:new Date().toISOString()});}
+ if(creditoPag>0){let cc=clientes[Number(clienteCreditoIdx)];cc.creditoUsado=creditoCliente(cc)+creditoPag;contas.unshift({tipo:"RECEBER",descricao:"Crédito da loja - "+cc.nome+" - "+vendaId,desc:"Crédito da loja - "+cc.nome+" - "+vendaId,cliente:cc.nome,clienteId:Number(clienteCreditoIdx),clienteUid:venda.clienteUid,valor:creditoPag,vencimento:new Date().toISOString().slice(0,10),venc:new Date().toISOString().slice(0,10),status:"ABERTA",vendaId:vendaId,criado_em:new Date().toISOString()});}
  Object.assign(venda,usuarioAtualCaixa());
  vendas.unshift(venda);
  let outros=pags.filter(p=>p.forma!=="DINHEIRO").reduce((s,p)=>s+Number(p.valor||0),0),
@@ -1917,6 +1917,17 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      q.forEach(v=>{if(!byId.has(v.id))byId.set(v.id,v)});
      vendas=Array.from(byId.values()).sort((a,b)=>String(b.registrado_em||b.data||'').localeCompare(String(a.registrado_em||a.data||'')));
      localStorage.setItem('cb_hom_vendas',JSON.stringify(vendas));
+     // Espelhar recebiveis do crediario sem duplicar uma mesma venda.
+     for(const v of vendas){
+       const credito=(v.pagamentos||[]).filter(p=>p.forma==='CREDITO_LOJA').reduce((sum,p)=>sum+Number(p.valor||0),0);
+       if(credito<=0||!v.clienteUid)continue;
+       const anterior=contas.find(c=>c.tipo==='RECEBER'&&c.vendaId===v.id);
+       if(anterior){anterior.cliente=v.cliente;anterior.clienteUid=v.clienteUid;anterior.valor=credito;anterior.descricao=anterior.descricao||('Crédito da loja - '+v.cliente+' - '+v.id);anterior.desc=anterior.descricao;anterior.venc=anterior.venc||anterior.vencimento||v.data;}
+       else contas.unshift({tipo:'RECEBER',descricao:'Crédito da loja - '+v.cliente+' - '+v.id,desc:'Crédito da loja - '+v.cliente+' - '+v.id,cliente:v.cliente,clienteUid:v.clienteUid,valor:credito,vencimento:v.data,venc:v.data,status:'ABERTA',vendaId:v.id,criado_em:v.registrado_em||v.data});
+     }
+     localStorage.setItem('cb_hom_contas',JSON.stringify(contas));
+     if(typeof renderContas==='function')renderContas();
+     if(typeof renderFinanceiro==='function')renderFinanceiro();
      if(typeof renderHistorico==='function')renderHistorico();
      if(typeof renderRelatorios==='function')renderRelatorios();
      if(typeof renderCaixa==='function')renderCaixa();
