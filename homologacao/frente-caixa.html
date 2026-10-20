@@ -48,7 +48,23 @@ function restaurarVendaPendente(){
   ultimoProduto=typeof saved.ultimoProduto==='string'?saved.ultimoProduto:null;
  }catch(e){console.error('Falha ao restaurar venda pendente',e)}
 }
-const cashKey='cb_hom_caixa';const cash=()=>{try{return JSON.parse(localStorage.getItem(cashKey)||'{"aberto":false,"inicial":0,"movs":[]}')}catch(e){return {aberto:false,inicial:0,movs:[]}}};const permiteNegativo=()=>localStorage.getItem('ug_politica_estoque')==='permitir';const products=()=>{try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}};const total=()=>cart.reduce((s,p)=>s+p.qtd*p.preco,0);
+const cashKey='cb_hom_caixa';const cash=()=>{try{return JSON.parse(localStorage.getItem(cashKey)||'{"aberto":false,"inicial":0,"movs":[]}')}catch(e){return {aberto:false,inicial:0,movs:[]}}};const permiteNegativo=()=>localStorage.getItem('ug_politica_estoque')==='permitir';const products=()=>{try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}};const ugPrecoPromocional=(p)=>{
+ const normal=Number(p.preco)||0;
+ try{
+  const agora=new Date(),dia=[agora.getFullYear(),String(agora.getMonth()+1).padStart(2,'0'),String(agora.getDate()).padStart(2,'0')].join('-');
+  const promos=JSON.parse(localStorage.getItem('cb_hom_promocoes')||'[]');
+  let melhor=null;
+  if(Array.isArray(promos))for(const promo of promos){
+   if(['PAUSADA','PARADA','FINALIZADA'].includes(promo.status)||promo.inicio&&dia<promo.inicio||promo.fim&&dia>promo.fim)continue;
+   for(const item of promo.itens||[])if(item.nome===p.nome){
+    const v=Number(item.precoPromo);
+    if(Number.isFinite(v)&&v>=0&&v<normal&&(melhor===null||v<melhor))melhor=v;
+   }
+  }
+  return melhor===null?normal:melhor;
+ }catch(e){return normal}
+};
+const total=()=>cart.reduce((s,p)=>s+p.qtd*p.preco,0);
 function render(){refreshCash();const last=cart.find(p=>p.nome===ultimoProduto)||cart[cart.length-1];$('produtoDestaque').textContent=last?.nome||'AGUARDANDO PRODUTO';$('codigo').placeholder=last?.nome||'AGUARDANDO PRODUTO';$('destaqueQtd').textContent=last?Number(last.qtd).toLocaleString('pt-BR'):'—';$('destaqueUnit').textContent=money(last?.preco||0);$('destaqueTotal').textContent=money(last?last.qtd*last.preco:0); $('linhas').innerHTML=cart.length?cart.map((p,i)=>'<tr><td>'+escapeHtml(p.nome)+'</td><td>'+p.qtd+'</td><td>'+money(p.preco)+'</td><td>'+money(p.qtd*p.preco)+'</td><td><button type="button" class="cancelar-item" data-indice="'+i+'" title="Cancelar este item — exige autorização do fiscal" aria-label="Cancelar '+escapeHtml(p.nome)+'" style="background:#b4232d;padding:6px 12px;font-size:19px">×</button></td></tr>').join(''):'<tr><td colspan="5">Nenhum produto registrado.</td></tr>';$('total').textContent=money(total());$('totalModal').textContent=money(total());salvarVendaPendente()}
 function fecharFiscal(){indiceCancelar=-1;$('fiscalCancelar').hidden=true;$('fiscalSenha').value='';$('fiscalErro').textContent='';$('codigo').focus()}
 $('linhas').addEventListener('click',e=>{const btn=e.target.closest('button.cancelar-item');if(!btn)return;const i=Number(btn.dataset.indice);if(!cart[i])return;indiceCancelar=i;$('fiscalProduto').textContent='Cancelar: '+cart[i].qtd+' × '+cart[i].nome;$('fiscalErro').textContent='';$('fiscalSenha').value='';$('fiscalCancelar').hidden=false;$('fiscalSenha').focus()});
@@ -71,7 +87,7 @@ $('fiscalConfirmar').onclick=async()=>{
 };
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function ugInterpretarCodigoPeso(texto){const m=String(texto||'').trim().match(/^(\d+(?:[.,]\d+)?)\s*\*\s*(.+)$/);if(!m)return {codigo:String(texto||'').trim(),qtd:1};return {codigo:m[2].trim(),qtd:Number(m[1].replace(',','.'))}}
-function ugAdicionarProdutoFrente(p,qtd){if(!Number.isFinite(qtd)||qtd<=0)return alert('Quantidade ou peso inválido.');const item=cart.find(x=>x.nome===p.nome);const novo=Math.round(((item?.qtd||0)+qtd)*1000)/1000;if(!permiteNegativo()&&novo>Number(p.qtd||0)+0.000001)return alert('Estoque insuficiente.');if(item)item.qtd=novo;else cart.push({nome:p.nome,qtd,preco:Number(p.preco)||0});ugRegistrarFuncaoCaixa('PRODUTO PASSADO',p.nome+' • quantidade '+qtd+' • unitário '+money(p.preco)+' • total '+money(qtd*Number(p.preco||0)));ultimoProduto=p.nome;render()}
+function ugAdicionarProdutoFrente(p,qtd){if(!Number.isFinite(qtd)||qtd<=0)return alert('Quantidade ou peso inválido.');const item=cart.find(x=>x.nome===p.nome);const novo=Math.round(((item?.qtd||0)+qtd)*1000)/1000;if(!permiteNegativo()&&novo>Number(p.qtd||0)+0.000001)return alert('Estoque insuficiente.');if(item)item.qtd=novo;else cart.push({nome:p.nome,qtd,preco:ugPrecoPromocional(p)});ugRegistrarFuncaoCaixa('PRODUTO PASSADO',p.nome+' • quantidade '+qtd+' • unitário '+money(ugPrecoPromocional(p))+' • total '+money(qtd*ugPrecoPromocional(p)));ultimoProduto=p.nome;render()}
 function scan(){const entrada=ugInterpretarCodigoPeso($('codigo').value);$('codigo').value='';$('areaLeitura').classList.remove('editando');if(!entrada.codigo){$('codigo').focus();return}if(!Number.isFinite(entrada.qtd)||entrada.qtd<=0)return alert('Quantidade inválida.');const p=products().find(p=>[p.barras,p.codigo].some(x=>String(x||'')===entrada.codigo));if(!p){ugRegistrarFuncaoCaixa('PRODUTO NÃO ENCONTRADO','Código: '+entrada.codigo);return alert('Produto não encontrado: '+entrada.codigo)}ugAdicionarProdutoFrente(p,entrada.qtd);$('codigo').focus()}
 let ugPortaBalanca=null;
 async function ugPuxarPesoBalanca(){
