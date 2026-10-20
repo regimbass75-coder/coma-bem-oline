@@ -2361,7 +2361,7 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
 <script id="unigestor-acompanhamento-vendas-js">
 (function(){
   let uvaLimite=5;
-  const uvaHoje=()=>new Date().toISOString().slice(0,10);
+  const uvaHoje=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-")};
   const uvaFmt=(v)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(v||0));
   const uvaDate=(v)=>String(v||"").slice(0,10);
   const uvaFmtDate=(v)=>{const p=String(v||"").split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:v};
@@ -2381,7 +2381,9 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
   }
 
   window.aplicarAcompanhamento=function(){
-    renderAcompanhamentoVendas();
+    const ini=document.getElementById('uvaDataIni'),fim=document.getElementById('uvaDataFim');
+    if(ini?.value&&fim?.value&&ini.value>fim.value){alert('A data inicial não pode ser posterior à data final.');ini.focus();return}
+    requestAnimationFrame(()=>renderAcompanhamentoVendas());
   };
 
   window.uvaSelecionarTop=function(limite){uvaLimite=limite;renderAcompanhamentoVendas()};
@@ -2432,8 +2434,8 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
       descontos+=Number(v.desconto||v.descontos||0);
       (Array.isArray(v.itens)?v.itens:[]).forEach(i=>{
         const nome=String(i.nome||i.produto||"Produto");
-        const qtd=Number(i.qtd||i.quantidade||1);
-        const valor=Number(i.preco||i.valor||0)*qtd;
+        const qtd=Number(i.qtd??i.quantidade??1);
+        const valor=Number(i.preco??i.valor??0)*qtd;
         if(!produtos[nome])produtos[nome]={nome,qtd:0,valor:0};
         produtos[nome].qtd+=qtd;
         produtos[nome].valor+=valor;
