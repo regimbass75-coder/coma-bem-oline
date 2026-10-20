@@ -1945,6 +1945,8 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  };
  window.ugAtualizarVendasCentrais=pull;
  setTimeout(()=>{if(window.__cbUsuarioLogado)ugAtualizarClientesCentrais().catch(console.warn)},2500);
+ setInterval(()=>{if(window.__cbUsuarioLogado&&navigator.onLine)ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message))},15000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&window.__cbUsuarioLogado)ugAtualizarClientesCentrais().catch(console.warn)});
  setInterval(()=>{if(window.__cbUsuarioLogado)pull()},12000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pull()});
 })();
@@ -1958,7 +1960,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugCarregarPreferenciasEmpresa();return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugCarregarPreferenciasEmpresa();setTimeout(()=>ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message)),300);return true;}
    }catch(e){}
    return false;
  }
