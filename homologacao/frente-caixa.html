@@ -87,7 +87,7 @@ async function ugPuxarPesoBalanca(){
   reader=ugPortaBalanca.readable.getReader();const decoder=new TextDecoder();let buffer='',peso=null;
   const deadline=Date.now()+7000;
   while(Date.now()<deadline){
-   const result=await Promise.race([reader.read(),new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),Math.max(1,deadline-Date.now())))]);
+   let timer;const result=await Promise.race([reader.read(),new Promise(resolve=>{timer=setTimeout(async()=>{try{await reader.cancel()}catch(e){}resolve({timeout:true})},Math.max(1,deadline-Date.now()))})]);clearTimeout(timer);
    if(result.timeout)throw Error('Tempo esgotado: balança não respondeu.');
    if(result.done)throw Error('Conexão encerrada.');
    buffer+=decoder.decode(result.value,{stream:true});
