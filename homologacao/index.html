@@ -2778,7 +2778,8 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const itens=event.data.items,payments=event.data.pagamentos;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
   if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'PDV principal indisponível.');
-  if(pdv.length)return reply(false,'Há uma venda aberta no PDV principal. Finalize ou cancele antes.');
+  const pendenteIgual=pdv.length===itens.length&&pdv.every((p,i)=>p.nome===itens[i].nome&&Number(p.qtd)===itens[i].qtd&&Number(p.preco)===itens[i].preco);
+  if(pdv.length&&!pendenteIgual)return reply(false,'Há outra venda aberta no PDV principal. Finalize ou cancele antes.');
   if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return reply(false,'Itens inválidos.');
   const produtos=JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]');
   if(!itens.every(x=>{const p=produtos.find(p=>p.nome===x.nome);return p&&Number(p.preco)===x.preco&&(ugPoliticaEstoque()||Number(p.qtd)>=x.qtd)}))return reply(false,'Confira o estoque e os preços.');
@@ -2796,7 +2797,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(!caixa.aberto)return reply(false,'Abra o caixa antes de finalizar.');
   busy=true;
   try{
-   pdv.push(...itens.map(x=>({nome:x.nome,qtd:x.qtd,preco:x.preco})));
+   if(!pendenteIgual)pdv.push(...itens.map(x=>({nome:x.nome,qtd:x.qtd,preco:x.preco})));
    localStorage.setItem('cb_hom_tipo_venda','BALCÃO');
    localStorage.removeItem('cb_hom_mesa_pdv');localStorage.removeItem('cb_hom_comanda_pdv');
    salvar();if(typeof renderPdv==='function')renderPdv();
@@ -2805,7 +2806,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    if(!form||!value||typeof adicionarPagamento!=='function')throw Error('Tela de pagamento indisponível.');
    for(const p of payments){
     if(![...form.options].some(o=>o.value===map[p.forma]))throw Error('Forma de pagamento indisponível: '+p.forma);
-    form.value=map[p.forma];value.value=String(p.valor);adicionarPagamento();
+    form.value=map[p.forma];if(p.forma==='CREDIARIO')atualizarCreditoPagamento();value.value=String(p.valor);adicionarPagamento();
    }
    if(Math.abs(totalPagamentos()-totalPdv())>0.01)throw Error('Valores não conferem.');
    const clienteSel=document.getElementById('pagClienteNormal');
