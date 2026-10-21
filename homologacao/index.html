@@ -728,6 +728,7 @@ function ugPublicarMesas(){
  fetch('./licenca/api.php?action=tables_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({mesas:mesas.map(m=>({numero:m.numero,status:m.status}))})}).then(r=>r.json()).then(d=>{if(!d.ok)console.warn('Sincronização das mesas:',d.erro)}).catch(e=>console.warn('Mesas offline:',e.message));
 }
 function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,1800)}
+window.ugAgendarMesasSync=ugAgendarMesasSync;
 function salvar(){ salvarInterno(); enfileirarSnapshotSincronizacao(); ugAgendarMesasSync(); }
 window.addEventListener('online',ugAgendarMesasSync);
 window.addEventListener('load',()=>setTimeout(ugAgendarMesasSync,4500));
@@ -2033,7 +2034,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugCarregarPreferenciasEmpresa();setTimeout(()=>ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message)),300);return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugCarregarPreferenciasEmpresa();setTimeout(()=>ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message)),300);window.ugAgendarMesasSync?.();return true;}
    }catch(e){}
    return false;
  }
@@ -2105,6 +2106,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));
      window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); storeOffline(d); window.ugAtualizarVendasCentrais?.();
      document.getElementById('cbLoginGate')?.remove();
+     window.ugAgendarMesasSync?.();
    }catch(e){
      if(m)m.textContent=e.message||'Não foi possível entrar.';
      const pw=document.getElementById('cbLoginPass');if(pw){pw.value='';pw.focus();}
