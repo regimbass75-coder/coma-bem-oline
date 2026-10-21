@@ -2894,6 +2894,11 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(!event.source||event.source.closed)return;
   const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message:typeof message==='string'?message:message?.mensagem,recibo:message?.recibo||null},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
+  // A preferência de avaliação é por empresa, não por navegador.
+  // Atualiza antes de montar o recibo; falhas não bloqueiam nem repetem a venda.
+  if(typeof window.ugCarregarGoogleReview==='function'){
+   try{await window.ugCarregarGoogleReview()}catch(e){console.warn('Preferência de avaliação indisponível',e)}
+  }
   const itens=event.data.items,payments=event.data.pagamentos;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
   if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'Módulo de registro de vendas indisponível. Reabra o UniGestor antes de cobrar.');
