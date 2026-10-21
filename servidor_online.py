@@ -70,6 +70,10 @@ def pagina_inicial_homologacao():
 def frente_caixa_homologacao():
     return send_from_directory('homologacao', 'frente-caixa.html')
 
+@app.get('/daf.html')
+def daf_homologacao():
+    return send_from_directory('homologacao', 'daf.html')
+
 @app.get('/logo-unigestor.png')
 def homolog_logo():
     return send_from_directory('homologacao', 'logo-unigestor.png')
