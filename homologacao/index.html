@@ -2883,12 +2883,12 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(busy)return reply(false,'Há uma finalização em andamento.');
   const itens=event.data.items,payments=event.data.pagamentos;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
-  if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'PDV principal indisponível.');
+  if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'Módulo de registro de vendas indisponível. Reabra o UniGestor antes de cobrar.');
   const pendenteIgual=pdv.length===itens.length&&pdv.every((p,i)=>p.nome===itens[i].nome&&Number(p.qtd)===itens[i].qtd&&Number(p.preco)===itens[i].preco);
-  if(pdv.length&&!pendenteIgual)return reply(false,'Há outra venda aberta no PDV principal. Finalize ou cancele antes.');
+  if(pdv.length&&!pendenteIgual)return reply(false,'Existe outra venda aberta no sistema. Confira antes de iniciar nova cobrança.');
   if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return reply(false,'Itens inválidos.');
-  const produtos=JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]');
-  if(!itens.every(x=>{const p=produtos.find(p=>p.nome===x.nome);return p&&Number(p.preco)===x.preco&&(ugPoliticaEstoque()||Number(p.qtd)>=x.qtd)}))return reply(false,'Confira o estoque e os preços.');
+  const produtos=Array.isArray(estoque)?estoque:[];
+  for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!ugPoliticaEstoque()&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
   const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA'};
   const totalTransferido=itens.reduce((sum,x)=>sum+x.qtd*x.preco,0);
   if(!Array.isArray(payments)||!payments.length||payments.length>12||!payments.every(p=>map[p.forma]&&Number.isFinite(p.valor)&&p.valor>0)||Math.abs(totalTransferido-payments.reduce((sum,p)=>sum+p.valor,0))>0.01)return reply(false,'Confira os valores e as formas de pagamento.');
@@ -2927,10 +2927,11 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
     if(!c||saldoCreditoCliente(c)+0.001<creditoTransferido)throw Error('Limite do cliente insuficiente para o crediário.');
     if(document.getElementById('pagClienteCredito')?.value!==String(clienteIdx))throw Error('Seleção de cliente do crediário não confirmada.');
    }
+   const idsAntes=new Set(vendas.map(v=>v.id));
    window.__ugFrenteCaixaReply=reply;window.__ugFrenteCaixaSilent=true;
    await confirmarPagamento();
-   if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Finalização não confirmada. Confira o PDV principal.');}
-  }catch(err){fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o PDV principal.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o PDV principal.');window.__ugFrenteCaixaSilent=false;}
+   if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;const nova=vendas.find(v=>!idsAntes.has(v.id));if(nova)reply(true,{mensagem:'Venda registrada.',recibo:htmlReciboFrenteCaixa(nova)});else reply(false,'Finalização não confirmada. Confira o Histórico de Vendas e o caixa antes de tentar novamente.');}
+  }catch(err){fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
   finally{busy=false}
  });
 })();
