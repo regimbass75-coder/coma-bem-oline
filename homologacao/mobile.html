@@ -82,7 +82,7 @@ async function abrirMesaMobile(box,m,voltar){
   const itens=[...cart.values()].map(p=>({nome:p.nome,qtd:p.qtd,preco:p.preco}));
   if(!pendingId)pendingId='MES'+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
   sending=true;render();msg.textContent='Enviando ao servidor...';
-  try{const d=await call('table_orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pendingId,mesa:Number(m.numero),cliente:customer.value.trim(),pessoas:Number(people.value||1),observacao:note.value.trim(),itens})});cart.clear();pendingId=null;lastSuccess='Pedido '+d.pedido.id+' registrado. Confirme o recebimento na cozinha.';go('groups')}
+  try{const d=await call('table_orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pendingId,mesa:Number(m.numero),cliente:customer.value.trim(),pessoas:Number(people.value||1),observacao:note.value.trim(),itens})});m.status='OCUPADA';cart.clear();pendingId=null;lastSuccess='Pedido '+d.pedido.id+' registrado. Confirme o recebimento na cozinha.';go('groups')}
   catch(e){msg.textContent='Envio não confirmado: '+e.message+'. Tente novamente sem alterar o pedido.'}
   finally{sending=false;if(screen==='review'){const failure=msg.textContent;render();msg.textContent=failure}}
  }
