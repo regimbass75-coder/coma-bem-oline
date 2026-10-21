@@ -32,7 +32,7 @@ box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
 async function abrirMesaMobile(box,m,voltar){
  box.replaceChildren();let catalog=[],group='Todos',screen='groups',pendingId=null,sending=false;
- const cart=new Map(),money=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
+ let lastSuccess='';const cart=new Map(),money=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
  const root=document.createElement('div');root.className='waiter-app';box.append(root);
  const head=document.createElement('div');head.className='waiter-head';root.append(head);
  const content=document.createElement('section');content.className='waiter-content';root.append(content);
@@ -56,6 +56,7 @@ async function abrirMesaMobile(box,m,voltar){
   title.append(h,sub);top.append(title);
   top.append(button('⋮',()=>{const menu=document.createElement('div');menu.className='waiter-popup';menu.append(button('Adicionar produtos',()=>go('groups')),button('Dados da mesa',()=>go('details')));const disabled=button('Fechar pedido (em preparação)',()=>{});disabled.disabled=true;const reprint=button('Reimprimir (em preparação)',()=>{});reprint.disabled=true;menu.append(disabled,reprint);head.querySelector('.waiter-popup')?.remove();head.append(menu)},'waiter-more'));head.append(top);
   if(screen==='groups'){
+   if(lastSuccess){const ok=document.createElement('p');ok.className='waiter-success';ok.textContent=lastSuccess;content.append(ok)}
    const search=document.createElement('input');search.type='search';search.placeholder='Buscar produto em todos os grupos';search.className='waiter-search';content.append(search);
    const grid=document.createElement('div');grid.className='waiter-grid';content.append(grid);
    function draw(){grid.replaceChildren();const q=search.value.trim().toLocaleLowerCase('pt-BR');if(q){const found=catalog.some(p=>p.nome.toLocaleLowerCase('pt-BR').includes(q));if(found){group='Todos';screen='products';render();const input=content.querySelector('input[type=search]');input.value=q;input.dispatchEvent(new Event('input'))}else grid.textContent='Nenhum produto encontrado.';return}
@@ -81,9 +82,9 @@ async function abrirMesaMobile(box,m,voltar){
   const itens=[...cart.values()].map(p=>({nome:p.nome,qtd:p.qtd,preco:p.preco}));
   if(!pendingId)pendingId='MES'+Date.now().toString(36)+Math.random().toString(36).slice(2,9);
   sending=true;render();msg.textContent='Enviando ao servidor...';
-  try{const d=await call('table_orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pendingId,mesa:Number(m.numero),cliente:customer.value.trim(),pessoas:Number(people.value||1),observacao:note.value.trim(),itens})});cart.clear();pendingId=null;go('groups');const ok=document.createElement('p');ok.className='waiter-success';ok.textContent='Pedido '+d.pedido.id+' registrado. Confirme o recebimento na cozinha.';content.prepend(ok)}
+  try{const d=await call('table_orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pendingId,mesa:Number(m.numero),cliente:customer.value.trim(),pessoas:Number(people.value||1),observacao:note.value.trim(),itens})});cart.clear();pendingId=null;lastSuccess='Pedido '+d.pedido.id+' registrado. Confirme o recebimento na cozinha.';go('groups')}
   catch(e){msg.textContent='Envio não confirmado: '+e.message+'. Tente novamente sem alterar o pedido.'}
-  finally{sending=false;render();if(screen==='review'&&msg.textContent.startsWith('Envio'))msg.textContent='Envio não confirmado. Tente novamente.'}
+  finally{sending=false;if(screen==='review'){const failure=msg.textContent;render();msg.textContent=failure}}
  }
  render();
  try{const d=await call('stock_catalog');catalog=(d.produtos||[]).filter(p=>p&&p.nome).map(p=>({nome:String(p.nome),preco:Number(p.preco??p.precoVenda??p.valor??0),grupo:String(p.grupo||p.categoria||'Sem grupo').trim()})).filter(p=>Number.isFinite(p.preco)&&p.preco>=0);render();if(!catalog.length){const empty=document.createElement('p');empty.textContent='Nenhum produto disponível no catálogo sincronizado.';content.prepend(empty)}}catch(e){const error=document.createElement('p');error.textContent='Não foi possível carregar os produtos: '+e.message;content.prepend(error)}
