@@ -2417,46 +2417,7 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
     const janela=window.open('','_blank');
     if(!janela){alert('Permita a abertura da janela para gerar o PDF.');return}
     janela.document.open();
-    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer><script id="ug-google-review-v1">
-(function(){
- const $=id=>document.getElementById(id);
- const key='ug_google_review_url';
- const valid=u=>{try{const x=new URL(u);return x.protocol==='https:'&&u.length<=1800}catch(e){return false}};
- window.ugReviewReciboHtml=function(){
-  const url=localStorage.getItem(key)||'';
-  if(!valid(url))return '';
-  const src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data='+encodeURIComponent(url);
-  return '<div style="text-align:center;padding:8px 0;break-inside:avoid;page-break-inside:avoid"><div style="font-weight:bold;font-size:12px">AVALIE NOSSA EMPRESA NO GOOGLE</div><img src="'+src+'" alt="QR Code para avaliar no Google" width="135" height="135" style="display:block;margin:5px auto"><div style="font-size:10px">Aponte a câmera e deixe sua avaliação</div></div>';
- };
- function preview(){
-  const u=$('ugGoogleReviewUrl')?.value.trim()||'',p=$('ugGoogleReviewPreview');if(!p)return;
-  p.replaceChildren();if(!valid(u))return;
-  const img=document.createElement('img');img.width=180;img.height=180;img.alt='QR Code da avaliação Google';img.src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data='+encodeURIComponent(u);p.appendChild(img);
- }
- window.ugCarregarGoogleReview=async function(){
-  const status=$('ugGoogleReviewStatus');
-  try{
-   const r=await fetch('./licenca/api.php?action=company_preferences',{credentials:'same-origin',cache:'no-store'}),d=await r.json();
-   if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível consultar');
-   const url=d.preferencias?.google_review_url||'';
-   localStorage.setItem(key,url);if($('ugGoogleReviewUrl'))$('ugGoogleReviewUrl').value=url;
-   preview();if(status)status.textContent=url?'Link da empresa carregado.':'Nenhum link de avaliação cadastrado.';
-  }catch(e){if(status)status.textContent='Não foi possível sincronizar: '+e.message}
- };
- window.ugSalvarGoogleReview=async function(){
-  const u=$('ugGoogleReviewUrl').value.trim(),status=$('ugGoogleReviewStatus');
-  if(u&&!valid(u))return alert('Informe um link HTTPS válido.');
-  try{
-   const get=await fetch('./licenca/api.php?action=company_preferences',{credentials:'same-origin',cache:'no-store'}),old=await get.json();
-   if(!get.ok||!old.ok)throw Error(old.erro||'Sessão inválida');
-   const post=await fetch('./licenca/api.php?action=company_preferences',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:old.revision,preferencias:{google_review_url:u}})}),d=await post.json();
-   if(!post.ok||!d.ok)throw Error(d.erro||'Falha ao salvar');
-   localStorage.setItem(key,u);preview();status.textContent=u?'Link salvo para a empresa.':'QR Code removido dos recibos.';alert('Configuração salva. Atualize as janelas de caixa para aplicar.');
-  }catch(e){status.textContent='Não foi possível salvar: '+e.message}
- };
- document.addEventListener('DOMContentLoaded',()=>{ugCarregarGoogleReview();$('ugGoogleReviewUrl')?.addEventListener('input',preview)});
-})();
-</script></body></html>');
+    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer></body></html>');
     janela.document.close();
     janela.focus();
   };
@@ -2996,5 +2957,44 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const win=window.open('./daf.html','ug_daf_prevenda','width=1300,height=850,resizable=yes,scrollbars=yes');
   if(!win)alert('Permita a abertura de janelas para utilizar o DAF.');
  };
+})();
+</script><script id="ug-google-review-v1">
+(function(){
+ const $=id=>document.getElementById(id);
+ const key='ug_google_review_url';
+ const valid=u=>{try{const x=new URL(u);return x.protocol==='https:'&&u.length<=1800}catch(e){return false}};
+ window.ugReviewReciboHtml=function(){
+  const url=localStorage.getItem(key)||'';
+  if(!valid(url))return '';
+  const src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data='+encodeURIComponent(url);
+  return '<div style="text-align:center;padding:8px 0;break-inside:avoid;page-break-inside:avoid"><div style="font-weight:bold;font-size:12px">AVALIE NOSSA EMPRESA NO GOOGLE</div><img src="'+src+'" alt="QR Code para avaliar no Google" width="135" height="135" style="display:block;margin:5px auto"><div style="font-size:10px">Aponte a câmera e deixe sua avaliação</div></div>';
+ };
+ function preview(){
+  const u=$('ugGoogleReviewUrl')?.value.trim()||'',p=$('ugGoogleReviewPreview');if(!p)return;
+  p.replaceChildren();if(!valid(u))return;
+  const img=document.createElement('img');img.width=180;img.height=180;img.alt='QR Code da avaliação Google';img.src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data='+encodeURIComponent(u);p.appendChild(img);
+ }
+ window.ugCarregarGoogleReview=async function(){
+  const status=$('ugGoogleReviewStatus');
+  try{
+   const r=await fetch('./licenca/api.php?action=company_preferences',{credentials:'same-origin',cache:'no-store'}),d=await r.json();
+   if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível consultar');
+   const url=d.preferencias?.google_review_url||'';
+   localStorage.setItem(key,url);if($('ugGoogleReviewUrl'))$('ugGoogleReviewUrl').value=url;
+   preview();if(status)status.textContent=url?'Link da empresa carregado.':'Nenhum link de avaliação cadastrado.';
+  }catch(e){if(status)status.textContent='Não foi possível sincronizar: '+e.message}
+ };
+ window.ugSalvarGoogleReview=async function(){
+  const u=$('ugGoogleReviewUrl').value.trim(),status=$('ugGoogleReviewStatus');
+  if(u&&!valid(u))return alert('Informe um link HTTPS válido.');
+  try{
+   const get=await fetch('./licenca/api.php?action=company_preferences',{credentials:'same-origin',cache:'no-store'}),old=await get.json();
+   if(!get.ok||!old.ok)throw Error(old.erro||'Sessão inválida');
+   const post=await fetch('./licenca/api.php?action=company_preferences',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:old.revision,preferencias:{google_review_url:u}})}),d=await post.json();
+   if(!post.ok||!d.ok)throw Error(d.erro||'Falha ao salvar');
+   localStorage.setItem(key,u);preview();status.textContent=u?'Link salvo para a empresa.':'QR Code removido dos recibos.';alert('Configuração salva. Atualize as janelas de caixa para aplicar.');
+  }catch(e){status.textContent='Não foi possível salvar: '+e.message}
+ };
+ document.addEventListener('DOMContentLoaded',()=>{ugCarregarGoogleReview();$('ugGoogleReviewUrl')?.addEventListener('input',preview)});
 })();
 </script></body></html>
