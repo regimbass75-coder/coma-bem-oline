@@ -2830,7 +2830,7 @@ async function syncExternalOrders(){
   const data=await centralOrderRequest('orders_list');
   if(String(data.restaurant_id)!==String(window.__cbRestaurante.id))return;
   const local=orders(),ids=new Set(local.map(x=>x.id));
-  for(const o of data.orders||[])if(!ids.has(o.id))local.unshift(o);
+  for(const o of data.orders||[]){const i=local.findIndex(x=>x.id===o.id);if(i>=0)local[i]={...local[i],...o};else local.unshift(o);}
   localStorage.setItem(K,JSON.stringify(local));
   renderOrders();
   const kitchenKey='cb_hom_cozinha',kitchen=get(kitchenKey),known=new Set(kitchen.map(x=>x.id));
@@ -2846,7 +2846,20 @@ async function syncExternalOrders(){
 
 function save(){const cliente=$('veCliente').value.trim();if(!cliente)return alert('Informe o cliente.');if(!cart.length)return alert('Adicione ao menos um produto.');let arr=orders();let id=current||('EXT-'+Date.now());let obj={id,cliente,obs:$('veObs').value.trim(),itens:cart.map(x=>({...x})),total:total(),status:'RASCUNHO',atualizado:new Date().toISOString()};const i=arr.findIndex(x=>x.id===id);if(i<0)arr.unshift(obj);else arr[i]=obj;try{localStorage.setItem(K,JSON.stringify(arr));current=id;queueOrder(obj);renderOrders();return true}catch(e){alert('Não foi possível salvar pedido neste dispositivo: '+e.message);return false}}
 function clear(){current=null;cart=[];$('veCliente').value='';$('veObs').value='';$('veBuscaPedido').value='';$('veResultadosPedido').innerHTML='';renderCart()}
-function renderOrders(){const root=$('veListaPedidos'),arr=orders();root.innerHTML=arr.length?arr.map((o,i)=>`<div class="ve-result"><div><b>${esc(o.id)}</b><div>${esc(o.cliente)} · ${money(o.total)} · ${esc(o.status)}</div></div><button type="button" data-load="${i}">Abrir</button></div>`).join(''):'<div class="ve-empty">Nenhum pedido salvo.</div>';root.querySelectorAll('[data-load]').forEach(b=>b.onclick=()=>{const o=arr[Number(b.dataset.load)];current=o.id;cart=o.itens.map(x=>({...x}));$('veCliente').value=o.cliente;$('veObs').value=o.obs||'';renderCart();window.scrollTo({top:0,behavior:'smooth'})});}
+async function excluirPedidoExterno(id){
+ const o=orders().find(x=>x.id===id);
+ if(!o||['FINALIZADO','CANCELADO'].includes(o.status))return alert('Este pedido já foi encerrado.');
+ if(!confirm('Excluir o pedido '+id+' da Venda Externa? O registro será mantido no histórico.'))return;
+ try{
+  await centralOrderRequest('orders_cancel',{id});
+  localStorage.setItem(orderQueueKey(),JSON.stringify(pendingOrders().filter(x=>x.id!==id)));
+  const arr=orders();const item=arr.find(x=>x.id===id);if(item)item.status='CANCELADO';
+  localStorage.setItem(K,JSON.stringify(arr));
+  if(current===id)clear();
+  renderOrders();
+ }catch(e){alert('Não foi possível excluir o pedido: '+e.message+'. Verifique a conexão e as permissões.')}
+}
+function renderOrders(){const root=$('veListaPedidos'),arr=orders().filter(o=>!['FINALIZADO','CANCELADO'].includes(o.status));root.innerHTML=arr.length?arr.map((o,i)=>`<div class="ve-result"><div><b>${esc(o.id)}</b><div>${esc(o.cliente)} · ${money(o.total)} · ${esc(o.status)}</div></div><button type="button" data-load="${i}">Abrir</button><button type="button" class="ve-secondary" data-cancel="${i}">Excluir pedido</button></div>`).join(''):'<div class="ve-empty">Nenhum pedido pendente.</div>';root.querySelectorAll('[data-load]').forEach(b=>b.onclick=()=>{const o=arr[Number(b.dataset.load)];current=o.id;cart=o.itens.map(x=>({...x}));$('veCliente').value=o.cliente;$('veObs').value=o.obs||'';renderCart();window.scrollTo({top:0,behavior:'smooth'})});root.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>excluirPedidoExterno(arr[Number(b.dataset.cancel)].id));}
 function finish(){if(!cart.length)return alert('Adicione produtos.');if(!$('veCliente').value.trim())return alert('Informe o cliente.');if(!save())return;const currentPdv=JSON.parse(localStorage.getItem('cb_hom_pdv')||'[]');if((Array.isArray(currentPdv)&&currentPdv.length)||(typeof pdv!=='undefined'&&pdv.length))return alert('Existe uma venda aberta no PDV. Finalize ou cancele essa venda antes de transferir o pedido externo.');for(const x of cart){const p=prod().find(y=>y.nome===x.nome);if(!p||Number(p.qtd||0)<x.qtd)return alert('Estoque insuficiente para '+x.nome)}
  try{
   // Usa o PDV original e sua finalização, evitando criar lançamentos financeiros paralelos.
