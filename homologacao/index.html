@@ -729,6 +729,28 @@ function ugPublicarMesas(){
 }
 function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,1800)}
 window.ugAgendarMesasSync=ugAgendarMesasSync;
+async function ugReceberPedidosMesa(){
+ if(!navigator.onLine||!window.__cbUsuarioLogado)return;
+ try{
+  const response=await fetch('./licenca/api.php?action=table_orders',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)return;
+  const data=await response.json();if(!data.ok||!Array.isArray(data.pedidos))return;
+  const kitchen=JSON.parse(localStorage.getItem('cb_hom_cozinha')||'[]');
+  const existing=new Set(kitchen.map(x=>x.id));
+  let changed=false;
+  for(const order of data.pedidos){
+   if(!order||!order.id||existing.has(order.id))continue;
+   kitchen.unshift({...order,status:'ENVIADO',origem:'MESA '+String(order.mesa).padStart(2,'0')});
+   existing.add(order.id);changed=true;
+   const mesa=mesas.find(x=>Number(x.numero)===Number(order.mesa));
+   if(mesa){mesa.status='OCUPADA';mesa.cliente=order.cliente||mesa.cliente||'';mesa.pessoas=order.pessoas||mesa.pessoas||1}
+  }
+  if(changed){localStorage.setItem('cb_hom_cozinha',JSON.stringify(kitchen));salvarInterno();renderKds();renderPedidos();renderDashboard();renderMesas()}
+ }catch(e){console.warn('Recebimento de pedidos de mesa:',e.message)}
+}
+setInterval(ugReceberPedidosMesa,12000);
+window.addEventListener('online',()=>setTimeout(ugReceberPedidosMesa,2500));
+
 function salvar(){ salvarInterno(); enfileirarSnapshotSincronizacao(); ugAgendarMesasSync(); }
 window.addEventListener('online',ugAgendarMesasSync);
 window.addEventListener('load',()=>setTimeout(ugAgendarMesasSync,4500));
