@@ -2155,9 +2155,12 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      const d=await r.json();
      if(!r.ok||!d.ok) throw new Error(d.erro||'Usuário ou senha inválidos.');
      sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));
-     window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); storeOffline(d); window.ugAtualizarVendasCentrais?.();
-     document.getElementById('cbLoginGate')?.remove();
-     window.ugAgendarMesasSync?.();
+     // Depois do login, manter a interface protegida e reiniciar o carregamento
+     // autenticado. Nunca exibir os dados locais da empresa anterior nesta tela.
+     storeOffline(d);
+     document.documentElement.classList.remove('ug-tenant-ready');
+     location.reload();
+     return;
    }catch(e){
      if(m)m.textContent=e.message||'Não foi possível entrar.';
      const pw=document.getElementById('cbLoginPass');if(pw){pw.value='';pw.focus();}
