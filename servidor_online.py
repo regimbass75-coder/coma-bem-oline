@@ -66,6 +66,13 @@ def pagina_inicial_homologacao():
     response.headers['Pragma'] = 'no-cache'
     return response
 
+@app.get('/mobile')
+@app.get('/mobile.html')
+def mobile_homologacao():
+    response = make_response(send_from_directory('homologacao', 'mobile.html'))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.get('/frente-caixa.html')
 def frente_caixa_homologacao():
     return send_from_directory('homologacao', 'frente-caixa.html')
