@@ -2416,66 +2416,7 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
     const janela=window.open('','_blank');
     if(!janela){alert('Permita a abertura da janela para gerar o PDF.');return}
     janela.document.open();
-    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer><script id="ug-daf-prevenda-v1">
-(function(){
- const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
- const dinheiro=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
- const api=async(action,body)=>{const r=await fetch('./licenca/api.php?action='+action,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Falha na comunicação');return d};
- let itens=[];
- function estoque(){try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}}
- function render(){
-  const box=$('dafItens');if(!box)return;
-  const prods=estoque();
-  box.innerHTML='<table style="width:100%"><thead><tr><th>Produto</th><th>Quantidade</th><th>Preço</th><th></th></tr></thead><tbody>'+itens.map((x,i)=>'<tr><td><select class="inp" data-daf-prod="'+i+'"><option value="">Selecione</option>'+prods.map((p,j)=>'<option value="'+j+'" '+(x.prod===j?'selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</select></td><td><input class="inp" data-daf-qtd="'+i+'" type="number" min="0.001" step="0.001" value="'+x.qtd+'" style="max-width:110px"></td><td>'+dinheiro(prods[x.prod]?.preco||0)+'</td><td><button type="button" data-daf-remove="'+i+'">Remover</button></td></tr>').join('')+'</tbody></table>';
-  box.querySelectorAll('[data-daf-prod]').forEach(e=>e.onchange=()=>{itens[+e.dataset.dafProd].prod=e.value===''?-1:Number(e.value);render()});
-  box.querySelectorAll('[data-daf-qtd]').forEach(e=>e.onchange=()=>{itens[+e.dataset.dafQtd].qtd=Number(e.value);render()});
-  box.querySelectorAll('[data-daf-remove]').forEach(e=>e.onclick=()=>{itens.splice(+e.dataset.dafRemove,1);render()});
-  $('dafTotal').textContent='Total: '+dinheiro(itens.reduce((a,x)=>a+(Number(prods[x.prod]?.preco)||0)*Number(x.qtd||0),0));
- }
- window.ugDAFAdicionar=()=>{itens.push({prod:-1,qtd:1});render()};
- window.ugDAFSalvar=async()=>{
-  const cliente=$('dafCliente').value.trim(),prods=estoque(),salvos=itens.map(x=>({nome:prods[x.prod]?.nome||'',qtd:Number(x.qtd),preco:Number(prods[x.prod]?.preco)}));
-  if(!cliente||!salvos.length||salvos.some(x=>!x.nome||!Number.isFinite(x.qtd)||x.qtd<=0||!Number.isFinite(x.preco)||x.preco<0))return alert('Informe cliente e produtos com quantidades válidas.');
-  const aviso=$('dafAviso');aviso.textContent='Salvando DAF no servidor...';
-  try{const d=await api('daf_create',{cliente,itens:salvos});itens=[];$('dafCliente').value='';render();aviso.textContent='DAF '+d.daf.numero+' salvo. Aguardando caixa.';await ugDAFListar()}
-  catch(e){aviso.textContent='DAF NÃO salvo: '+e.message}
- };
- window.ugDAFListar=async()=>{
-  const box=$('dafLista');box.textContent='Consultando...';
-  try{const d=await api('daf_list');const pend=d.dafs.filter(x=>x.status==='PENDENTE').reverse();box.innerHTML=pend.length?'<table style="width:100%"><tr><th>Número</th><th>Cliente</th><th>Produtos</th><th>Status</th></tr>'+pend.map(x=>'<tr><td>'+esc(x.numero)+'</td><td>'+esc(x.cliente)+'</td><td>'+x.itens.length+'</td><td>Aguardando caixa</td></tr>').join('')+'</table>':'Nenhum DAF aguardando caixa.'}catch(e){box.textContent='Falha na consulta: '+e.message}
- };
- const campo=$('dafCodigoBusca');
- if(campo)campo.addEventListener('keydown',e=>{
-  if(e.key!=='Enter')return;e.preventDefault();
-  const texto=campo.value.trim();campo.value='';
-  const m=texto.match(/^(\\d+(?:[.,]\\d+)?)\\s*\\*\\s*(.+)$/);
-  const qtd=m?Number(m[1].replace(',','.')):1,codigo=m?m[2].trim():texto;
-  const ps=estoque(),idx=ps.findIndex(p=>String(p.barras||'')===codigo||String(p.codigo||'')===codigo);
-  if(idx<0)return alert('Produto não encontrado: '+codigo);
-  if(!Number.isFinite(qtd)||qtd<=0)return alert('Quantidade inválida.');
-  const atual=itens.find(x=>x.prod===idx);
-  if(atual)atual.qtd=Math.round((atual.qtd+qtd)*1000)/1000;else itens.push({prod:idx,qtd});
-  render();campo.focus();
- });
- const renderBase=render;
- // O destaque mostra o ultimo produto selecionado, sem modificar o estoque.
- document.addEventListener('keydown',e=>{
-  if($('VENDA_DAF')?.classList.contains('hide'))return;
-  if(e.key==='F9'){e.preventDefault();ugDAFSalvar()}
-  if(e.key==='F2'){e.preventDefault();ugDAFAdicionar();$('dafItens')?.querySelector('select:last-of-type')?.focus()}
- });
- document.addEventListener('DOMContentLoaded',render);
-})();
-</script><script id="ug-daf-visual-v1">
-(function(){
- const botao=document.getElementById('ugAbrirDAFPrincipal');
- if(!botao)return;
- botao.onclick=()=>{
-  const win=window.open('./daf.html','ug_daf_prevenda','width=1300,height=850,resizable=yes,scrollbars=yes');
-  if(!win)alert('Permita a abertura de janelas para utilizar o DAF.');
- };
-})();
-</script></body></html>');
+    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer></body></html>');
     janela.document.close();
     janela.focus();
   };
@@ -2956,5 +2897,64 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   }catch(err){fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o PDV principal.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o PDV principal.');window.__ugFrenteCaixaSilent=false;}
   finally{busy=false}
  });
+})();
+</script><script id="ug-daf-prevenda-v1">
+(function(){
+ const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+ const dinheiro=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+ const api=async(action,body)=>{const r=await fetch('./licenca/api.php?action='+action,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Falha na comunicação');return d};
+ let itens=[];
+ function estoque(){try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}}
+ function render(){
+  const box=$('dafItens');if(!box)return;
+  const prods=estoque();
+  box.innerHTML='<table style="width:100%"><thead><tr><th>Produto</th><th>Quantidade</th><th>Preço</th><th></th></tr></thead><tbody>'+itens.map((x,i)=>'<tr><td><select class="inp" data-daf-prod="'+i+'"><option value="">Selecione</option>'+prods.map((p,j)=>'<option value="'+j+'" '+(x.prod===j?'selected':'')+'>'+esc(p.nome)+'</option>').join('')+'</select></td><td><input class="inp" data-daf-qtd="'+i+'" type="number" min="0.001" step="0.001" value="'+x.qtd+'" style="max-width:110px"></td><td>'+dinheiro(prods[x.prod]?.preco||0)+'</td><td><button type="button" data-daf-remove="'+i+'">Remover</button></td></tr>').join('')+'</tbody></table>';
+  box.querySelectorAll('[data-daf-prod]').forEach(e=>e.onchange=()=>{itens[+e.dataset.dafProd].prod=e.value===''?-1:Number(e.value);render()});
+  box.querySelectorAll('[data-daf-qtd]').forEach(e=>e.onchange=()=>{itens[+e.dataset.dafQtd].qtd=Number(e.value);render()});
+  box.querySelectorAll('[data-daf-remove]').forEach(e=>e.onclick=()=>{itens.splice(+e.dataset.dafRemove,1);render()});
+  $('dafTotal').textContent='Total: '+dinheiro(itens.reduce((a,x)=>a+(Number(prods[x.prod]?.preco)||0)*Number(x.qtd||0),0));
+ }
+ window.ugDAFAdicionar=()=>{itens.push({prod:-1,qtd:1});render()};
+ window.ugDAFSalvar=async()=>{
+  const cliente=$('dafCliente').value.trim(),prods=estoque(),salvos=itens.map(x=>({nome:prods[x.prod]?.nome||'',qtd:Number(x.qtd),preco:Number(prods[x.prod]?.preco)}));
+  if(!cliente||!salvos.length||salvos.some(x=>!x.nome||!Number.isFinite(x.qtd)||x.qtd<=0||!Number.isFinite(x.preco)||x.preco<0))return alert('Informe cliente e produtos com quantidades válidas.');
+  const aviso=$('dafAviso');aviso.textContent='Salvando DAF no servidor...';
+  try{const d=await api('daf_create',{cliente,itens:salvos});itens=[];$('dafCliente').value='';render();aviso.textContent='DAF '+d.daf.numero+' salvo. Aguardando caixa.';await ugDAFListar()}
+  catch(e){aviso.textContent='DAF NÃO salvo: '+e.message}
+ };
+ window.ugDAFListar=async()=>{
+  const box=$('dafLista');box.textContent='Consultando...';
+  try{const d=await api('daf_list');const pend=d.dafs.filter(x=>x.status==='PENDENTE').reverse();box.innerHTML=pend.length?'<table style="width:100%"><tr><th>Número</th><th>Cliente</th><th>Produtos</th><th>Status</th></tr>'+pend.map(x=>'<tr><td>'+esc(x.numero)+'</td><td>'+esc(x.cliente)+'</td><td>'+x.itens.length+'</td><td>Aguardando caixa</td></tr>').join('')+'</table>':'Nenhum DAF aguardando caixa.'}catch(e){box.textContent='Falha na consulta: '+e.message}
+ };
+ const campo=$('dafCodigoBusca');
+ if(campo)campo.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;e.preventDefault();
+  const texto=campo.value.trim();campo.value='';
+  const m=texto.match(/^(\\d+(?:[.,]\\d+)?)\\s*\\*\\s*(.+)$/);
+  const qtd=m?Number(m[1].replace(',','.')):1,codigo=m?m[2].trim():texto;
+  const ps=estoque(),idx=ps.findIndex(p=>String(p.barras||'')===codigo||String(p.codigo||'')===codigo);
+  if(idx<0)return alert('Produto não encontrado: '+codigo);
+  if(!Number.isFinite(qtd)||qtd<=0)return alert('Quantidade inválida.');
+  const atual=itens.find(x=>x.prod===idx);
+  if(atual)atual.qtd=Math.round((atual.qtd+qtd)*1000)/1000;else itens.push({prod:idx,qtd});
+  render();campo.focus();
+ });
+ const renderBase=render;
+ // O destaque mostra o ultimo produto selecionado, sem modificar o estoque.
+ document.addEventListener('keydown',e=>{
+  if($('VENDA_DAF')?.classList.contains('hide'))return;
+  if(e.key==='F9'){e.preventDefault();ugDAFSalvar()}
+  if(e.key==='F2'){e.preventDefault();ugDAFAdicionar();$('dafItens')?.querySelector('select:last-of-type')?.focus()}
+ });
+ document.addEventListener('DOMContentLoaded',render);
+})();
+</script><script id="ug-daf-visual-v1">
+(function(){
+ const botao=document.getElementById('ugAbrirDAFPrincipal');
+ if(!botao)return;
+ botao.onclick=()=>{
+  const win=window.open('./daf.html','ug_daf_prevenda','width=1300,height=850,resizable=yes,scrollbars=yes');
+  if(!win)alert('Permita a abertura de janelas para utilizar o DAF.');
+ };
 })();
 </script></body></html>
