@@ -216,9 +216,11 @@ if($action==='company_preferences'){
  $input=json_decode((string)file_get_contents('php://input'),true);
  $color=$input['preferencias']['cor_frente']??null;
  $qr=$input['preferencias']['google_review_url']??null;
+ $qrShow=$input['preferencias']['google_review_enabled']??null;
  if($color!==null&&(!is_string($color)||!preg_match('/^#[0-9a-fA-F]{6}$/D',$color)))outj(['ok'=>false,'erro'=>'Cor inválida.'],400);
  if($qr!==null&&(!is_string($qr)||strlen($qr)>1800||($qr!==''&&(!filter_var($qr,FILTER_VALIDATE_URL)||strtolower((string)parse_url($qr,PHP_URL_SCHEME))!=='https'))))outj(['ok'=>false,'erro'=>'Informe um endereço HTTPS válido para avaliação.'],400);
- if($color===null&&$qr===null)outj(['ok'=>false,'erro'=>'Nenhuma preferência informada.'],400);
+ if($qrShow!==null&&!is_bool($qrShow))outj(['ok'=>false,'erro'=>'Opção de impressão inválida.'],400);
+ if($color===null&&$qr===null&&$qrShow===null)outj(['ok'=>false,'erro'=>'Nenhuma preferência informada.'],400);
  $expected=$input['revision']??null;
  if(!is_int($expected)||$expected<0)outj(['ok'=>false,'erro'=>'Revisão obrigatória.'],400);
  if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
@@ -231,6 +233,7 @@ if($action==='company_preferences'){
   $prefs=is_array($current['preferencias']??null)?$current['preferencias']:[];
   if($color!==null)$prefs['cor_frente']=$color;
   if($qr!==null)$prefs['google_review_url']=$qr;
+  if($qrShow!==null)$prefs['google_review_enabled']=$qrShow;
   $data=['revision'=>$revision+1,'preferencias'=>$prefs,'atualizado_em'=>gmdate('c')];
   $encoded=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
   rewind($fp);ftruncate($fp,0);fwrite($fp,$encoded);fflush($fp);
