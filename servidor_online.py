@@ -274,6 +274,7 @@ def homolog_master_bridge():
                 with conn.cursor() as cur:
                     cur.execute('CREATE TABLE IF NOT EXISTS ug_mesas_mobile (restaurant_id TEXT PRIMARY KEY, mesas JSONB NOT NULL, atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW())')
                     if request.method == 'POST':
+                        cur.execute('CREATE TABLE IF NOT EXISTS ug_pedidos_mesa (restaurant_id TEXT NOT NULL, pedido_id TEXT NOT NULL, mesa INTEGER NOT NULL, dados JSONB NOT NULL, criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(restaurant_id,pedido_id))')
                         cur.execute("SELECT DISTINCT mesa FROM ug_pedidos_mesa WHERE restaurant_id=%s",(company,))
                         occupied={int(row[0]) for row in cur.fetchall()}
                         for table in clean:
