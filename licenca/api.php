@@ -144,6 +144,59 @@ if($action==='authorize_password'){
   outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
 }
 // Preferências compartilhadas por empresa, com revisão para evitar perda por concorrência.
+// DAF: pre-venda interna por empresa; sem pagamento, estoque ou impressao.
+if(in_array($action,['daf_list','daf_create','daf_complete'],true)){
+ $method=$_SERVER['REQUEST_METHOD']??'GET';
+ if(($action==='daf_list'&&$method!=='GET')||($action!=='daf_list'&&$method!=='POST'))outj(['ok'=>false,'erro'=>'Metodo invalido.'],405);
+ start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessao invalida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licenca inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['PDV/Vendas','Caixa'],$perms)&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))
+   outj(['ok'=>false,'erro'=>'Sem permissao de vendas.'],403);
+ $dir=DATA_DIR.'/empresa-daf';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponivel.'],503);
+ $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponivel.'],503);
+ if(!flock($fp,LOCK_EX)){fclose($fp);outj(['ok'=>false,'erro'=>'Armazenamento ocupado.'],503);}
+ try{
+  rewind($fp);$raw=stream_get_contents($fp);
+  $docs=json_decode($raw?:'[]',true);if(!is_array($docs))$docs=[];
+  if($action==='daf_list'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'dafs'=>array_values($docs)]);}
+  $input=json_decode(file_get_contents('php://input'),true);
+  if(!is_array($input))outj(['ok'=>false,'erro'=>'Dados invalidos.'],400);
+  if($action==='daf_create'){
+   $cliente=trim((string)($input['cliente']??''));
+   $itens=$input['itens']??[];
+   if($cliente===''||mb_strlen($cliente)>120||!is_array($itens)||count($itens)<1||count($itens)>100)outj(['ok'=>false,'erro'=>'Informe cliente e produtos validos.'],400);
+   $limpos=[];
+   foreach($itens as $item){
+    if(!is_array($item))outj(['ok'=>false,'erro'=>'Produto invalido.'],400);
+    $nome=trim((string)($item['nome']??''));$qtd=$item['qtd']??null;$preco=$item['preco']??null;
+    if($nome===''||mb_strlen($nome)>180||!is_numeric($qtd)||!is_numeric($preco)||!is_finite((float)$qtd)||!is_finite((float)$preco)||(float)$qtd<=0||(float)$qtd>100000||(float)$preco<0||(float)$preco>10000000)outj(['ok'=>false,'erro'=>'Produto, quantidade ou preco invalido.'],400);
+    $limpos[]=['nome'=>$nome,'qtd'=>(float)$qtd,'preco'=>(float)$preco];
+   }
+   $id=bin2hex(random_bytes(12));
+   $doc=['id'=>$id,'numero'=>strtoupper(substr($id,0,8)),'cliente'=>$cliente,'itens'=>$limpos,'status'=>'PENDENTE','criadoEm'=>gmdate('c'),'vendedor'=>(string)($actor['name']??$actor['login']??'')];
+   $docs[]=$doc;
+  }else{
+   $id=trim((string)($input['id']??''));
+   $idx=null;foreach($docs as $k=>$d)if(($d['id']??'')===$id){$idx=$k;break;}
+   if($idx===null)outj(['ok'=>false,'erro'=>'DAF nao encontrado.'],404);
+   if(($docs[$idx]['status']??'')!=='PENDENTE')outj(['ok'=>false,'erro'=>'DAF ja finalizado.'],409);
+   if(!in_array(($input['resultado']??''),['FINALIZADO'],true))outj(['ok'=>false,'erro'=>'Resultado invalido.'],400);
+   $docs[$idx]['status']='FINALIZADO';$docs[$idx]['finalizadoEm']=gmdate('c');
+   $doc=$docs[$idx];
+  }
+  $json=json_encode(array_values($docs),JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+  rewind($fp);ftruncate($fp,0);if(fwrite($fp,$json)===false)throw new RuntimeException('Falha ao gravar DAF');
+  fflush($fp);flock($fp,LOCK_UN);fclose($fp);
+  outj(['ok'=>true,'daf'=>$doc]);
+ }catch(Throwable $e){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Nao foi possivel salvar DAF.'],503);}
+}
 if($action==='company_preferences'){
  if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
  start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
