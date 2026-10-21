@@ -339,8 +339,8 @@ body.login-page,
 <button type="button" data-v="VENDA_ACOMPANHAMENTO">🏆 Top 5 — Mais vendidos</button>
 <button type="button" data-v="VENDA_INDICADORES">Indicadores</button>
 <button type="button" data-v="VENDA_CAIXA_FUNCOES">Funções executadas no caixa</button>
-<button type="button" data-v="VENDA_DAF">📄 DAF — Pré-venda</button>
-<button type="button" id="ugAbrirDAFVisual">⌨️ Tela DAF (estilo Frente de Caixa)</button>
+<button type="button" id="ugAbrirDAFPrincipal">📄 DAF — Pré-venda</button>
+
 <button type="button" data-v="VENDA_ORCAMENTOS">📋 Orçamentos</button>
 <button type="button" data-v="VENDA_ORDENS_SERVICO">🛠️ Ordens de Serviço</button>
 <button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button>
@@ -2468,7 +2468,7 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
 })();
 </script><script id="ug-daf-visual-v1">
 (function(){
- const botao=document.getElementById('ugAbrirDAFVisual');
+ const botao=document.getElementById('ugAbrirDAFPrincipal');
  if(!botao)return;
  botao.onclick=()=>{
   const win=window.open('./daf.html','ug_daf_prevenda','width=1300,height=850,resizable=yes,scrollbars=yes');
