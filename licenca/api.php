@@ -505,7 +505,7 @@ if(in_array($action,['sales_list','sales_create'],true)){
   }
 }
 // Pedidos abertos por empresa: separados de vendas e protegidos por sessao/permissoes.
-if(in_array($action,['orders_list','orders_upsert','orders_complete'],true)){
+if(in_array($action,['orders_list','orders_upsert','orders_complete','orders_cancel'],true)){
  start_app();
  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
@@ -531,6 +531,25 @@ if(in_array($action,['orders_list','orders_upsert','orders_complete'],true)){
    if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
    flock($fp,LOCK_UN);fclose($fp);
    outj(['ok'=>true,'orders'=>$rows,'restaurant_id'=>$rid]);
+  }
+  if($action==='orders_cancel'){
+   if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+   if(!in_array(($actor['role']??''),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Somente administrador ou gerente pode excluir pedidos.'],403);
+   $body=json_decode((string)file_get_contents('php://input'),true);
+   $id=trim((string)($body['id']??''));
+   if(!preg_match('/^[a-zA-Z0-9_-]{5,100}$/D',$id))outj(['ok'=>false,'erro'=>'ID inválido.'],400);
+   foreach($rows as &$row){
+    if(($row['id']??'')!==$id)continue;
+    if(($row['status']??'')!=='ABERTO')outj(['ok'=>false,'erro'=>'Somente pedidos abertos podem ser excluídos.'],409);
+    $row['status']='CANCELADO';$row['cancelado_em']=date('c');$row['cancelado_por']=(string)$actor['id'];
+    $encoded=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+    rewind($fp);
+    if(fwrite($fp,$encoded)!==strlen($encoded)||!ftruncate($fp,strlen($encoded))||!fflush($fp))throw new RuntimeException('write');
+    flock($fp,LOCK_UN);fclose($fp);
+    outj(['ok'=>true,'id'=>$id]);
+   }
+   unset($row);
+   outj(['ok'=>false,'erro'=>'Pedido externo não encontrado.'],404);
   }
   if($action==='orders_complete'){
    if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
