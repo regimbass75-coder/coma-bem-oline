@@ -176,6 +176,51 @@ def homolog_master_bridge():
     action = (request.args.get('action') or '').strip().lower()
     if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
+    if action == 'tables_sync':
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+        cookie = request.cookies.get('UG_GESTOR_SESSION', '')
+        if not cookie:
+            return jsonify({'ok': False, 'erro': 'Sessão necessária.'}), 401
+        try:
+            auth_request = Request('https://unigestor-master-teste.onrender.com/licenca/api.php?action=me',
+                                   headers={'Cookie': 'COMABEM_APP=' + cookie, 'Accept': 'application/json'})
+            with urlopen(auth_request, timeout=15) as upstream:
+                identity = json.loads(upstream.read(262144))
+        except (HTTPError, URLError, TimeoutError, ValueError):
+            return jsonify({'ok': False, 'erro': 'Não foi possível validar a sessão.'}), 401
+        if not identity.get('ok'):
+            return jsonify({'ok': False, 'erro': 'Sessão inválida.'}), 401
+        company = str((identity.get('restaurant') or {}).get('id') or '')
+        user = identity.get('user') or {}
+        modules = (identity.get('modules') or {}).get('effective_modules') or []
+        if not company or not isinstance(modules, list) or not any(x in modules for x in ('Mesas', 'Garçom Mobile', 'PDV/Vendas', 'Configurações')):
+            return jsonify({'ok': False, 'erro': 'Sem permissão de mesas.'}), 403
+        if request.method == 'POST':
+            if str(user.get('role') or '').upper() not in ('ADMINISTRADOR', 'GERENTE') or not any(x in modules for x in ('Mesas', 'Configurações')):
+                return jsonify({'ok': False, 'erro': 'Sem permissão para publicar mesas.'}), 403
+            payload = request.get_json(silent=True) or {}
+            mesas = payload.get('mesas')
+            if not isinstance(mesas, list) or len(mesas) > 500:
+                return jsonify({'ok': False, 'erro': 'Lista de mesas inválida.'}), 400
+            clean, seen = [], set()
+            for m in mesas:
+                if not isinstance(m, dict) or type(m.get('numero')) is not int or m['numero'] < 1 or m['numero'] > 500 or m['numero'] in seen or m.get('status') not in ('LIVRE', 'OCUPADA', 'FECHADA'):
+                    return jsonify({'ok': False, 'erro': 'Mesa inválida.'}), 400
+                seen.add(m['numero'])
+                clean.append({'numero': m['numero'], 'status': m['status']})
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute('CREATE TABLE IF NOT EXISTS ug_mesas_mobile (restaurant_id TEXT PRIMARY KEY, mesas JSONB NOT NULL, atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW())')
+                    if request.method == 'POST':
+                        cur.execute('INSERT INTO ug_mesas_mobile (restaurant_id, mesas, atualizado_em) VALUES (%s,%s::jsonb,NOW()) ON CONFLICT (restaurant_id) DO UPDATE SET mesas=EXCLUDED.mesas, atualizado_em=NOW()', (company, json.dumps(clean)))
+                    cur.execute('SELECT mesas, atualizado_em FROM ug_mesas_mobile WHERE restaurant_id=%s', (company,))
+                    row = cur.fetchone()
+            return jsonify({'ok': True, 'disponivel': bool(row), 'mesas': row[0] if row else [], 'atualizado_em': row[1].isoformat() if row else None})
+        except Exception:
+            app.logger.exception('Falha na sincronização de mesas')
+            return jsonify({'ok': False, 'erro': 'Armazenamento de mesas indisponível.'}), 503
     if action in ('login', 'logout', 'users_create', 'users_update', 'sales_create', 'orders_upsert', 'orders_complete', 'orders_cancel', 'authorize', 'authorize_password', 'stock_price', 'customers_save', 'customers_delete', 'credit_receipt_pay', 'daf_create', 'daf_complete', 'tables_sync') and request.method != 'POST':
         return jsonify({'ok': False, 'erro': 'Use POST.'}), 405
     if action in ('', 'me', 'users_list', 'sales_list', 'orders_list', 'company_backup', 'customers_list', 'credit_receipts_list', 'daf_list') and request.method != 'GET':
