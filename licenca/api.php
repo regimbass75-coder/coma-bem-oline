@@ -505,7 +505,7 @@ if(in_array($action,['sales_list','sales_create'],true)){
   }
 }
 // Pedidos abertos por empresa: separados de vendas e protegidos por sessao/permissoes.
-if(in_array($action,['orders_list','orders_upsert'],true)){
+if(in_array($action,['orders_list','orders_upsert','orders_complete'],true)){
  start_app();
  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
@@ -531,6 +531,22 @@ if(in_array($action,['orders_list','orders_upsert'],true)){
    if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
    flock($fp,LOCK_UN);fclose($fp);
    outj(['ok'=>true,'orders'=>$rows,'restaurant_id'=>$rid]);
+  }
+  if($action==='orders_complete'){
+   if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+   $body=json_decode((string)file_get_contents('php://input'),true);
+   $id=trim((string)($body['id']??''));
+   if(!preg_match('/^[a-zA-Z0-9_-]{5,100}$/D',$id))outj(['ok'=>false,'erro'=>'ID inválido.'],400);
+   foreach($rows as &$row){
+    if(($row['id']??'')!==$id)continue;
+    if(($row['status']??'')==='FINALIZADO')outj(['ok'=>true,'already_completed'=>true]);
+    $row['status']='FINALIZADO';$row['finalizado_em']=date('c');
+    $encoded=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+    rewind($fp);ftruncate($fp,0);fwrite($fp,$encoded);fflush($fp);flock($fp,LOCK_UN);fclose($fp);
+    outj(['ok'=>true,'id'=>$id]);
+   }
+   unset($row);
+   outj(['ok'=>false,'erro'=>'Pedido externo não encontrado.'],404);
   }
   if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
   $body=file_get_contents('php://input');
