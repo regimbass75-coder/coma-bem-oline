@@ -85,6 +85,10 @@ def daf_homologacao():
 def homolog_logo():
     return send_from_directory('homologacao', 'logo-unigestor.png')
 
+@app.get('/mobile.webmanifest')
+def mobile_manifest_homologacao():
+    return send_from_directory('homologacao', 'mobile.webmanifest', mimetype='application/manifest+json')
+
 @app.get('/manifest.webmanifest')
 def manifest_homologacao():
     return send_from_directory('homologacao', 'manifest.webmanifest')
