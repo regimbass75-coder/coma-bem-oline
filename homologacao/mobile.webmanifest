@@ -1,0 +1,19 @@
+{
+  "name": "UniGestor Mobile",
+  "short_name": "UniGestor",
+  "id": "/mobile",
+  "start_url": "/mobile",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef3fa",
+  "theme_color": "#0b4f9c",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/logo-unigestor.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
