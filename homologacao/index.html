@@ -2487,40 +2487,6 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
     if(!janela){alert('Permita a abertura da janela para gerar o PDF.');return}
     janela.document.open();
     janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer><script>
-// Monitor de vendas remoto: consultas somente leitura, sem modificar caixa ou PDV.
-(function(){
- let busy=false;
- const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};
- const money=n=>'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
- const day=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
- const saleDay=x=>{const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;if(!raw)return null;const v=String(raw),m=v.match(/^(\d{4}-\d{2}-\d{2})/);if(m)return m[1];const d=new Date(raw);return Number.isNaN(d.getTime())?null:d.toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'})};
- async function update(){
-  const section=document.getElementById('MONITOR_VENDAS');
-  if(busy||!section||section.classList.contains('hide')||document.hidden||!navigator.onLine)return;
-  busy=true;
-  try{
-   const res=await fetch('./licenca/api.php?action=sales_list',{credentials:'same-origin',cache:'no-store'});
-   if(!res.ok)throw Error('HTTP '+res.status);
-   const data=await res.json();if(!data.ok||!Array.isArray(data.sales))throw Error(data.erro||'Resposta inválida');
-   const rows=data.sales,hasDates=!rows.length||rows.some(x=>saleDay(x)!==null);
-   const today=rows.filter(x=>saleDay(x)===day());
-   const cancelled=x=>/CANCEL|ESTORN|ANULAD/i.test(String(x.status||''));
-   const valid=today.filter(x=>!cancelled(x));
-   const value=x=>{const n=Number(x.total??x.valor_total??x.amount??x.valor);return Number.isFinite(n)?n:null};
-   const complete=valid.every(x=>value(x)!==null);
-   const total=complete?valid.reduce((sum,x)=>sum+value(x),0):null;
-   set('ugMonTotal',hasDates&&complete?money(total):'Indisponível');
-   set('ugMonVendas',hasDates?String(valid.length):'—');
-   set('ugMonTicket',hasDates&&complete?money(valid.length?total/valid.length:0):'—');
-   set('ugMonCancel',hasDates?String(today.length-valid.length):'—');
-   set('ugMonInfo',!hasDates?'Vendas sem data identificável':!complete?'Valores incompletos':'Vendas registradas no servidor');
-   set('ugMonitorEstado','● Atualizado às '+new Date().toLocaleTimeString('pt-BR'));
-   const list=document.getElementById('ugMonUltimas');if(list){list.replaceChildren();if(!today.length)list.textContent='Nenhuma venda identificada hoje.';for(const x of today.slice().reverse().slice(0,15)){const row=document.createElement('div');row.className='ug-monitor-entry';const a=document.createElement('span');a.textContent=String(x.cliente||x.numero||x.id||'Venda')+' · '+String(x.status||'Registrada');const b=document.createElement('strong');const n=value(x);b.textContent=n===null?'Sem valor':money(n);row.append(a,b);list.append(row)}}
-  }catch(e){set('ugMonitorEstado','Falha na consulta: '+e.message)}
-  finally{busy=false}
- }
- setInterval(update,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});setTimeout(update,1500);
-})();
 </script></body></html>');
     janela.document.close();
     janela.focus();
@@ -3120,4 +3086,40 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
  };
  document.addEventListener('DOMContentLoaded',()=>{ugCarregarGoogleReview();$('ugGoogleReviewUrl')?.addEventListener('input',preview)});
 })();
+</script><script>
+// Monitor de vendas remoto: consultas somente leitura, sem modificar caixa ou PDV.
+(function(){
+ let busy=false;
+ const set=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value};
+ const money=n=>'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const day=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
+ const saleDay=x=>{const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;if(!raw)return null;const v=String(raw),m=v.match(/^(\d{4}-\d{2}-\d{2})/);if(m)return m[1];const d=new Date(raw);return Number.isNaN(d.getTime())?null:d.toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'})};
+ async function update(){
+  const section=document.getElementById('MONITOR_VENDAS');
+  if(busy||!section||section.classList.contains('hide')||document.hidden||!navigator.onLine)return;
+  busy=true;
+  try{
+   const res=await fetch('./licenca/api.php?action=sales_list',{credentials:'same-origin',cache:'no-store'});
+   if(!res.ok)throw Error('HTTP '+res.status);
+   const data=await res.json();if(!data.ok||!Array.isArray(data.sales))throw Error(data.erro||'Resposta inválida');
+   const rows=data.sales,hasDates=!rows.length||rows.some(x=>saleDay(x)!==null);
+   const today=rows.filter(x=>saleDay(x)===day());
+   const cancelled=x=>/CANCEL|ESTORN|ANULAD/i.test(String(x.status||''));
+   const valid=today.filter(x=>!cancelled(x));
+   const value=x=>{const n=Number(x.total??x.valor_total??x.amount??x.valor);return Number.isFinite(n)?n:null};
+   const complete=valid.every(x=>value(x)!==null);
+   const total=complete?valid.reduce((sum,x)=>sum+value(x),0):null;
+   set('ugMonTotal',hasDates&&complete?money(total):'Indisponível');
+   set('ugMonVendas',hasDates?String(valid.length):'—');
+   set('ugMonTicket',hasDates&&complete?money(valid.length?total/valid.length:0):'—');
+   set('ugMonCancel',hasDates?String(today.length-valid.length):'—');
+   set('ugMonInfo',!hasDates?'Vendas sem data identificável':!complete?'Valores incompletos':'Vendas registradas no servidor');
+   set('ugMonitorEstado','● Atualizado às '+new Date().toLocaleTimeString('pt-BR'));
+   const list=document.getElementById('ugMonUltimas');if(list){list.replaceChildren();if(!today.length)list.textContent='Nenhuma venda identificada hoje.';for(const x of today.slice().reverse().slice(0,15)){const row=document.createElement('div');row.className='ug-monitor-entry';const a=document.createElement('span');a.textContent=String(x.cliente||x.numero||x.id||'Venda')+' · '+String(x.status||'Registrada');const b=document.createElement('strong');const n=value(x);b.textContent=n===null?'Sem valor':money(n);row.append(a,b);list.append(row)}}
+  }catch(e){set('ugMonitorEstado','Falha na consulta: '+e.message)}
+  finally{busy=false}
+ }
+ setInterval(update,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)update()});setTimeout(update,1500);
+})();
+
 </script></body></html>
