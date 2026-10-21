@@ -225,6 +225,7 @@ def homolog_master_bridge():
                         if not tables or not any(int(t.get('numero',0))==mesa and t.get('status')!='FECHADA' for t in tables[0]):
                             return jsonify({'ok':False,'erro':'Mesa não disponível no restaurante.'}),409
                         cur.execute('INSERT INTO ug_pedidos_mesa(restaurant_id,pedido_id,mesa,dados) VALUES (%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING',(company,oid,mesa,json.dumps(pedido)))
+                        cur.execute("UPDATE ug_mesas_mobile SET mesas=(SELECT jsonb_agg(CASE WHEN (entry->>'numero')::integer=%s THEN jsonb_set(entry,'{status}','\"OCUPADA\"'::jsonb) ELSE entry END) FROM jsonb_array_elements(mesas) AS entry), atualizado_em=NOW() WHERE restaurant_id=%s",(mesa,company))
                         cur.execute('SELECT dados FROM ug_pedidos_mesa WHERE restaurant_id=%s AND pedido_id=%s',(company,oid))
                         saved=cur.fetchone()[0]
                         if saved.get('mesa')!=mesa: return jsonify({'ok':False,'erro':'Identificador já utilizado.'}),409
@@ -273,6 +274,10 @@ def homolog_master_bridge():
                 with conn.cursor() as cur:
                     cur.execute('CREATE TABLE IF NOT EXISTS ug_mesas_mobile (restaurant_id TEXT PRIMARY KEY, mesas JSONB NOT NULL, atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW())')
                     if request.method == 'POST':
+                        cur.execute("SELECT DISTINCT mesa FROM ug_pedidos_mesa WHERE restaurant_id=%s",(company,))
+                        occupied={int(row[0]) for row in cur.fetchall()}
+                        for table in clean:
+                            if table['numero'] in occupied and table['status']=='LIVRE': table['status']='OCUPADA'
                         cur.execute('INSERT INTO ug_mesas_mobile (restaurant_id, mesas, atualizado_em) VALUES (%s,%s::jsonb,NOW()) ON CONFLICT (restaurant_id) DO UPDATE SET mesas=EXCLUDED.mesas, atualizado_em=NOW()', (company, json.dumps(clean)))
                     cur.execute('SELECT mesas, atualizado_em FROM ug_mesas_mobile WHERE restaurant_id=%s', (company,))
                     row = cur.fetchone()
