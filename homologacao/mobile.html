@@ -34,8 +34,8 @@ function monitorVendas(box){
   busy=true;
   try{
    const d=await call('sales_list');const rows=Array.isArray(d.sales)?d.sales:[];
-   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Fortaleza'});
-   const dateOf=x=>{const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;if(!raw)return null;const str=String(raw);const match=str.match(/^(\\d{4}-\\d{2}-\\d{2})/);if(match)return match[1];const parsed=new Date(raw);return Number.isNaN(parsed.getTime())?null:parsed.toLocaleDateString('en-CA',{timeZone:'America/Fortaleza'})};
+   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
+   const dateOf=x=>{const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;if(!raw)return null;const str=String(raw);const match=str.match(/^(\d{4}-\d{2}-\d{2})/);if(match)return match[1];const parsed=new Date(raw);return Number.isNaN(parsed.getTime())?null:parsed.toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'})};
    const dated=rows.filter(x=>dateOf(x)===today);
    const cancelled=x=>/CANCEL|ESTORN|ANULAD/i.test(String(x.status||''));
    const valid=dated.filter(x=>!cancelled(x));
