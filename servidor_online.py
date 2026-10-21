@@ -174,8 +174,67 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync', 'table_orders'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
+    if action == 'table_orders':
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+        cookie=request.cookies.get('UG_GESTOR_SESSION','')
+        if not cookie: return jsonify({'ok':False,'erro':'Sessão necessária.'}),401
+        try:
+            req=Request('https://unigestor-master-teste.onrender.com/licenca/api.php?action=me',headers={'Cookie':'COMABEM_APP='+cookie,'Accept':'application/json'})
+            with urlopen(req,timeout=15) as upstream: identity=json.loads(upstream.read(262144))
+        except (HTTPError,URLError,TimeoutError,ValueError):
+            return jsonify({'ok':False,'erro':'Sessão inválida.'}),401
+        if not identity.get('ok'): return jsonify({'ok':False,'erro':'Sessão inválida.'}),401
+        company=str((identity.get('restaurant') or {}).get('id') or '')
+        modules=(identity.get('modules') or {}).get('effective_modules') or []
+        if not company or not isinstance(modules,list) or not any(x in modules for x in ('Mesas','Garçom Mobile','PDV/Vendas','Configurações')):
+            return jsonify({'ok':False,'erro':'Sem permissão de mesas.'}),403
+        actor=identity.get('user') or {}
+        role=str(actor.get('role') or '').upper()
+        if request.method=='POST':
+            if role not in ('ADMINISTRADOR','GERENTE','GARCOM','GARÇOM') and not any(x in modules for x in ('Garçom Mobile','Mesas')):
+                return jsonify({'ok':False,'erro':'Sem permissão de atendimento.'}),403
+            data=request.get_json(silent=True) or {}
+            operation=data.get('operation','create')
+            if operation!='create': return jsonify({'ok':False,'erro':'Operação não disponível.'}),400
+            try: mesa=int(data.get('mesa',0))
+            except (ValueError,TypeError): mesa=0
+            items=data.get('itens')
+            oid=str(data.get('id') or '')
+            if not (1<=mesa<=500 and 8<=len(oid)<=100 and oid.isascii() and oid.replace('-','').isalnum() and isinstance(items,list) and 1<=len(items)<=100):
+                return jsonify({'ok':False,'erro':'Pedido inválido.'}),400
+            clean=[]
+            for x in items:
+                if not isinstance(x,dict): return jsonify({'ok':False,'erro':'Item inválido.'}),400
+                name=str(x.get('nome') or '').strip()
+                try: qty=int(x.get('qtd',0)); price=float(x.get('preco',-1))
+                except (ValueError,TypeError): return jsonify({'ok':False,'erro':'Quantidade ou preço inválido.'}),400
+                if not name or len(name)>200 or not 1<=qty<=99 or not 0<=price<=100000:
+                    return jsonify({'ok':False,'erro':'Item fora dos limites.'}),400
+                clean.append({'nome':name,'qtd':qty,'preco':round(price,2)})
+            pedido={'id':oid,'mesa':mesa,'tipoVenda':'MESA','origem':'MESA '+str(mesa).zfill(2),'itens':clean,'cliente':str(data.get('cliente') or '')[:100],'pessoas':max(1,min(100,int(data.get('pessoas') or 1))),'observacao':str(data.get('observacao') or '')[:500],'status':'ENVIADO','hora':datetime.now(timezone.utc).strftime('%H:%M'),'criado_em':now_iso(),'garcom':str(actor.get('name') or actor.get('login') or '')[:100]}
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute('CREATE TABLE IF NOT EXISTS ug_pedidos_mesa (restaurant_id TEXT NOT NULL, pedido_id TEXT NOT NULL, mesa INTEGER NOT NULL, dados JSONB NOT NULL, criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(restaurant_id,pedido_id))')
+                    if request.method=='POST':
+                        cur.execute('SELECT mesas FROM ug_mesas_mobile WHERE restaurant_id=%s',(company,))
+                        tables=cur.fetchone()
+                        if not tables or not any(int(t.get('numero',0))==mesa and t.get('status')!='FECHADA' for t in tables[0]):
+                            return jsonify({'ok':False,'erro':'Mesa não disponível no restaurante.'}),409
+                        cur.execute('INSERT INTO ug_pedidos_mesa(restaurant_id,pedido_id,mesa,dados) VALUES (%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING',(company,oid,mesa,json.dumps(pedido)))
+                        cur.execute('SELECT dados FROM ug_pedidos_mesa WHERE restaurant_id=%s AND pedido_id=%s',(company,oid))
+                        saved=cur.fetchone()[0]
+                        if saved.get('mesa')!=mesa: return jsonify({'ok':False,'erro':'Identificador já utilizado.'}),409
+                        return jsonify({'ok':True,'pedido':saved})
+                    cur.execute('SELECT dados FROM ug_pedidos_mesa WHERE restaurant_id=%s ORDER BY criado_em DESC LIMIT 300',(company,))
+                    orders=[x[0] for x in cur.fetchall()]
+            return jsonify({'ok':True,'pedidos':orders})
+        except Exception:
+            app.logger.exception('Falha em pedidos de mesa')
+            return jsonify({'ok':False,'erro':'Pedidos de mesa indisponíveis.'}),503
     if action == 'tables_sync':
         from urllib.request import Request, urlopen
         from urllib.error import HTTPError, URLError
