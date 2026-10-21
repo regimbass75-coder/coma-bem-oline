@@ -241,6 +241,41 @@ if($action==='company_preferences'){
  outj(['ok'=>true,'revision'=>$revision+1]);
 }
 // Catálogo compartilhado por empresa. Publicação inicial explícita para proteger o estoque local.
+if($action==='tables_sync'){
+ if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||$rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['Mesas','Garçom Mobile','PDV/Vendas','Configurações'], $perms))outj(['ok'=>false,'erro'=>'Sem permissão de mesas.'],403);
+ $dir=DATA_DIR.'/empresa-mesas';$file=$dir.'/'.hash('sha256',$rid).'.json';
+ if($_SERVER['REQUEST_METHOD']==='GET'){
+  $data=is_file($file)?json_decode((string)@file_get_contents($file),true):null;
+  outj(['ok'=>true,'mesas'=>is_array($data['mesas']??null)?$data['mesas']:[],'disponivel'=>is_array($data),'atualizado_em'=>$data['atualizado_em']??null]);
+ }
+ if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true)||!array_intersect(['Mesas','Configurações'], $perms))outj(['ok'=>false,'erro'=>'Sem permissão para publicar mesas.'],403);
+ $raw=file_get_contents('php://input');if(strlen($raw)>100000)outj(['ok'=>false,'erro'=>'Dados excedem limite.'],413);
+ $payload=json_decode($raw,true);$mesas=$payload['mesas']??null;
+ if(!is_array($mesas)||count($mesas)>500)outj(['ok'=>false,'erro'=>'Lista de mesas inválida.'],400);
+ $clean=[];$seen=[];
+ foreach($mesas as $m){
+  if(!is_array($m))outj(['ok'=>false,'erro'=>'Mesa inválida.'],400);
+  $numero=filter_var($m['numero']??null,FILTER_VALIDATE_INT);
+  $status=strtoupper((string)($m['status']??'LIVRE'));
+  if($numero===false||$numero<1||$numero>500||isset($seen[$numero])||!in_array($status,['LIVRE','OCUPADA','FECHADA'],true))outj(['ok'=>false,'erro'=>'Número ou estado de mesa inválido.'],400);
+  $seen[$numero]=true;$clean[]=['numero'=>$numero,'status'=>$status];
+ }
+ if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Falha ao criar armazenamento.'],503);
+ $fp=@fopen($file,'c+');if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ try{if(!flock($fp,LOCK_EX))throw new RuntimeException('lock');
+  $data=['mesas'=>$clean,'atualizado_em'=>gmdate('c')];$json=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+  rewind($fp);if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp))throw new RuntimeException('write');
+  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'mesas'=>$clean]);
+ }catch(Throwable $e){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao salvar mesas.'],503);}
+}
 if($action==='stock_catalog'){
   if(!in_array($_SERVER['REQUEST_METHOD'],['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
   start_app();
