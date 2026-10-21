@@ -340,6 +340,7 @@ body.login-page,
 <button type="button" data-v="VENDA_INDICADORES">Indicadores</button>
 <button type="button" data-v="VENDA_CAIXA_FUNCOES">Funções executadas no caixa</button>
 <button type="button" data-v="VENDA_DAF">📄 DAF — Pré-venda</button>
+<button type="button" id="ugAbrirDAFVisual">⌨️ Tela DAF (estilo Frente de Caixa)</button>
 <button type="button" data-v="VENDA_ORCAMENTOS">📋 Orçamentos</button>
 <button type="button" data-v="VENDA_ORDENS_SERVICO">🛠️ Ordens de Serviço</button>
 <button type="button" data-v="VENDA_EXTERNA">📱 Venda Externa</button>
@@ -2444,6 +2445,15 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
   try{const d=await api('daf_list');const pend=d.dafs.filter(x=>x.status==='PENDENTE').reverse();box.innerHTML=pend.length?'<table style="width:100%"><tr><th>Número</th><th>Cliente</th><th>Produtos</th><th>Status</th></tr>'+pend.map(x=>'<tr><td>'+esc(x.numero)+'</td><td>'+esc(x.cliente)+'</td><td>'+x.itens.length+'</td><td>Aguardando caixa</td></tr>').join('')+'</table>':'Nenhum DAF aguardando caixa.'}catch(e){box.textContent='Falha na consulta: '+e.message}
  };
  document.addEventListener('DOMContentLoaded',render);
+})();
+</script><script id="ug-daf-visual-v1">
+(function(){
+ const botao=document.getElementById('ugAbrirDAFVisual');
+ if(!botao)return;
+ botao.onclick=()=>{
+  const area=document.getElementById('VENDA_DAF');
+  if(area){document.querySelector('[data-v="VENDA_DAF"]')?.click();area.scrollIntoView({behavior:'smooth'});}
+ };
 })();
 </script></body></html>');
     janela.document.close();
