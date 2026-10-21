@@ -65,7 +65,7 @@ const cashKey='cb_hom_caixa';const cash=()=>{try{return JSON.parse(localStorage.
  }catch(e){return normal}
 };
 const total=()=>cart.reduce((s,p)=>s+p.qtd*p.preco,0);
-function render(){if(!cart.length&&ugDAFSelecionado)ugDAFSelecionado=null;refreshCash();const last=cart.find(p=>p.nome===ultimoProduto)||cart[cart.length-1];$('produtoDestaque').textContent=last?.nome||'AGUARDANDO PRODUTO';$('codigo').placeholder=last?.nome||'AGUARDANDO PRODUTO';$('destaqueQtd').textContent=last?Number(last.qtd).toLocaleString('pt-BR'):'—';$('destaqueUnit').textContent=money(last?.preco||0);$('destaqueTotal').textContent=money(last?last.qtd*last.preco:0); $('linhas').innerHTML=cart.length?cart.map((p,i)=>'<tr><td>'+escapeHtml(p.nome)+'</td><td>'+p.qtd+'</td><td>'+money(p.preco)+'</td><td>'+money(p.qtd*p.preco)+'</td><td><button type="button" class="cancelar-item" data-indice="'+i+'" title="Cancelar este item — exige autorização do fiscal" aria-label="Cancelar '+escapeHtml(p.nome)+'" style="background:#b4232d;padding:6px 12px;font-size:19px">×</button></td></tr>').join(''):'<tr><td colspan="5">Nenhum produto registrado.</td></tr>';$('total').textContent=money(total());$('totalModal').textContent=money(total());salvarVendaPendente()}
+function render(){if(!cart.length){ugDAFSelecionado=null;ugPedidoExternoSelecionado=null;}refreshCash();const last=cart.find(p=>p.nome===ultimoProduto)||cart[cart.length-1];$('produtoDestaque').textContent=last?.nome||'AGUARDANDO PRODUTO';$('codigo').placeholder=last?.nome||'AGUARDANDO PRODUTO';$('destaqueQtd').textContent=last?Number(last.qtd).toLocaleString('pt-BR'):'—';$('destaqueUnit').textContent=money(last?.preco||0);$('destaqueTotal').textContent=money(last?last.qtd*last.preco:0); $('linhas').innerHTML=cart.length?cart.map((p,i)=>'<tr><td>'+escapeHtml(p.nome)+'</td><td>'+p.qtd+'</td><td>'+money(p.preco)+'</td><td>'+money(p.qtd*p.preco)+'</td><td><button type="button" class="cancelar-item" data-indice="'+i+'" title="Cancelar este item — exige autorização do fiscal" aria-label="Cancelar '+escapeHtml(p.nome)+'" style="background:#b4232d;padding:6px 12px;font-size:19px">×</button></td></tr>').join(''):'<tr><td colspan="5">Nenhum produto registrado.</td></tr>';$('total').textContent=money(total());$('totalModal').textContent=money(total());salvarVendaPendente()}
 function fecharFiscal(){indiceCancelar=-1;$('fiscalCancelar').hidden=true;$('fiscalSenha').value='';$('fiscalErro').textContent='';$('codigo').focus()}
 $('linhas').addEventListener('click',e=>{const btn=e.target.closest('button.cancelar-item');if(!btn)return;const i=Number(btn.dataset.indice);if(!cart[i])return;indiceCancelar=i;$('fiscalProduto').textContent='Cancelar: '+cart[i].qtd+' × '+cart[i].nome;$('fiscalErro').textContent='';$('fiscalSenha').value='';$('fiscalCancelar').hidden=false;$('fiscalSenha').focus()});
 $('fiscalVoltar').onclick=fecharFiscal;
@@ -145,7 +145,7 @@ function imprimirComprovanteFrente(html){
  window.focus();
  (async()=>{const imgs=[...recibo.querySelectorAll('img')];await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,2500))]);try{window.focus();window.print()}catch(e){alert('Venda finalizada. Não foi possível abrir a impressão: '+e.message)}})();
 }
-window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==window.opener||e.data?.type!=='ug_frente_caixa_result_v1')return;aguardando=false;$('concluir').disabled=false;if(e.data.ok){if(ugDAFSelecionado)void ugDAFConfirmarVenda();ugRegistrarFuncaoCaixa('VENDA FINALIZADA',cart.map(x=>x.nome+' ('+x.qtd+')').join('; ')+' • total '+money(total())+' • pagamentos '+pagamentos.map(p=>p.forma+': '+money(p.valor)).join(', '));const c=cash();if(c.aberto){c.movs=Array.isArray(c.movs)?c.movs:[];c.movs.push({tipo:'VENDA',total:total(),pagamentos:pagamentos.map(p=>({...p})),data:new Date().toISOString()});localStorage.setItem(cashKey,JSON.stringify(c))}cart=[];ultimoProduto=null;pagamentos=[];$('cliente').value='';ugMostrarClienteSelecionado();render();close();if(e.data.recibo){imprimirComprovanteFrente(e.data.recibo)}else alert('Venda finalizada. Comprovante indisponível para impressão.')}else{const msg=e.data.message||'Não foi possível finalizar a venda. Confira o PDV principal.';ugRegistrarFuncaoCaixa('ERRO NA FINALIZAÇÃO',msg);$('aviso').textContent=msg+' A venda foi mantida na Frente de Caixa; confira o PDV principal antes de tentar novamente.';close();alert(msg+' A tela de pagamento foi fechada sem apagar os produtos. Confira o PDV principal antes de repetir a finalização.')}});
+window.addEventListener('message',e=>{if(e.origin!==location.origin||e.source!==window.opener||e.data?.type!=='ug_frente_caixa_result_v1')return;aguardando=false;$('concluir').disabled=false;if(e.data.ok){if(ugDAFSelecionado)void ugDAFConfirmarVenda();void ugConfirmarPedidoExterno();ugRegistrarFuncaoCaixa('VENDA FINALIZADA',cart.map(x=>x.nome+' ('+x.qtd+')').join('; ')+' • total '+money(total())+' • pagamentos '+pagamentos.map(p=>p.forma+': '+money(p.valor)).join(', '));const c=cash();if(c.aberto){c.movs=Array.isArray(c.movs)?c.movs:[];c.movs.push({tipo:'VENDA',total:total(),pagamentos:pagamentos.map(p=>({...p})),data:new Date().toISOString()});localStorage.setItem(cashKey,JSON.stringify(c))}cart=[];ultimoProduto=null;pagamentos=[];$('cliente').value='';ugMostrarClienteSelecionado();render();close();if(e.data.recibo){imprimirComprovanteFrente(e.data.recibo)}else alert('Venda finalizada. Comprovante indisponível para impressão.')}else{const msg=e.data.message||'Não foi possível finalizar a venda. Confira o PDV principal.';ugRegistrarFuncaoCaixa('ERRO NA FINALIZAÇÃO',msg);$('aviso').textContent=msg+' A venda foi mantida na Frente de Caixa; confira o PDV principal antes de tentar novamente.';close();alert(msg+' A tela de pagamento foi fechada sem apagar os produtos. Confira o PDV principal antes de repetir a finalização.')}});
 function ugCaixaResumo(){
  const c=cash(),movs=Array.isArray(c.movs)?c.movs:[];
  const formas=['DINHEIRO','PIX','DEBITO','CREDITO','BOLETO','CREDIARIO'];
@@ -214,6 +214,7 @@ function refreshOperator(){let name='Não identificado';try{const u=window.opene
 $('fecharAjuda').onclick=()=>{$('ajuda').hidden=true;$('codigo').focus()};
 $('areaLeitura').addEventListener('click',()=>{$('codigo').focus()});$('codigo').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();scan()}else if(e.key==='Escape'){e.preventDefault();$('codigo').value='';$('codigo').blur()}});$('finalizar').onclick=open;$('voltar').onclick=close;$('concluir').onclick=conclude;$('limpar').onclick=()=>{if(!cart.length)return alert('Não há itens para cancelar.');indiceCancelar=-2;$('fiscalProduto').textContent='Cancelar toda a venda ('+cart.length+' itens)';$('fiscalErro').textContent='';$('fiscalSenha').value='';$('fiscalCancelar').hidden=false;$('fiscalSenha').focus()};document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>choose(b.dataset.f));// DAF: modulo isolado; nao altera pagamento nem os demais atalhos.
 let ugDAFSelecionado=null;
+let ugPedidoExternoSelecionado=null;
 async function ugDAFApi(action,body){
  const r=await fetch('./licenca/api.php?action='+action,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Falha de comunicacao');return d;
@@ -224,28 +225,37 @@ window.ugAbrirBuscaDAF=async function(){
  if(cart.length)return alert('Existe uma venda em andamento. Finalize ou cancele essa venda antes de carregar um DAF.');
  if(document.getElementById('ugDAFModal'))return;
  const modal=document.createElement('div');modal.id='ugDAFModal';modal.style.cssText='position:fixed;inset:0;background:#000b;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
- modal.innerHTML='<div style="background:white;color:#222;padding:20px;border-radius:12px;width:min(780px,98vw);max-height:90vh;overflow:auto"><h2>F3 — Buscar DAF</h2><input id="ugDAFFiltro" placeholder="Nome do cliente ou número do DAF" style="width:100%;padding:12px;margin-bottom:12px"><div id="ugDAFResultados">Consultando servidor...</div><button type="button" id="ugDAFFechar">Fechar</button></div>';
+ modal.innerHTML='<div style="background:white;color:#222;padding:20px;border-radius:12px;width:min(780px,98vw);max-height:90vh;overflow:auto"><h2>F3 — DAF / Venda Externa</h2><input id="ugDAFFiltro" placeholder="Cliente, número do DAF ou pedido externo" style="width:100%;padding:12px;margin-bottom:12px"><div id="ugDAFResultados">Consultando servidor...</div><button type="button" id="ugDAFFechar">Fechar</button></div>';
  document.body.appendChild(modal);document.getElementById('ugDAFFechar').onclick=ugDAFFechar;
  const box=document.getElementById('ugDAFResultados');
  try{
-  const data=await ugDAFApi('daf_list');const docs=(data.dafs||[]).filter(x=>x.status==='PENDENTE').reverse();
+  const data=await ugDAFApi('daf_list');
+  const docs=(data.dafs||[]).filter(x=>x.status==='PENDENTE').reverse().map(x=>({...x,origem:'DAF'}));
+  let externoErro='';
+  try{
+   const pedidos=await ugDAFApi('orders_list');
+   docs.push(...(pedidos.orders||[]).filter(x=>x.status==='ABERTO').reverse().map(x=>({...x,origem:'VENDA EXTERNA',numero:x.id})));
+  }catch(e){externoErro=e.message}
+
   const draw=()=>{
    const q=document.getElementById('ugDAFFiltro')?.value.toLocaleLowerCase('pt-BR')||'';
    const filtrados=docs.filter(x=>(x.cliente+' '+x.numero).toLocaleLowerCase('pt-BR').includes(q));
    box.replaceChildren();
-   if(!filtrados.length){box.textContent='Nenhum DAF pendente encontrado.';return}
+   if(!filtrados.length){box.textContent='Nenhum DAF ou pedido externo pendente encontrado.'+(externoErro?' Consulta de pedidos externos: '+externoErro:'');return}
    for(const d of filtrados){
     const btn=document.createElement('button');btn.type='button';btn.style.cssText='display:block;width:100%;text-align:left;padding:13px;margin-bottom:7px;border:1px solid #ccc;border-radius:6px;background:#f4f7fb;color:#222;cursor:pointer';
-    btn.textContent=d.numero+' — '+d.cliente+' — '+d.itens.length+' produto(s) — '+money(d.itens.reduce((a,x)=>a+Number(x.qtd)*Number(x.preco),0));
+    btn.textContent=(d.origem==='DAF'?'DAF — ':'VENDA EXTERNA — ')+d.numero+' — '+d.cliente+' — '+d.itens.length+' produto(s) — '+money(d.itens.reduce((a,x)=>a+Number(x.qtd)*Number(x.preco),0));
     btn.onclick=async()=>{
      if(cart.length)return alert('Finalize a venda atual antes de abrir um DAF.');
      try{
-      const fresh=await ugDAFApi('daf_list'),doc=(fresh.dafs||[]).find(x=>x.id===d.id&&x.status==='PENDENTE');
-      if(!doc)throw Error('DAF nao esta mais pendente.');
+      const externo=d.origem==='VENDA EXTERNA';
+      const fresh=await ugDAFApi(externo?'orders_list':'daf_list');
+      const doc=(externo?fresh.orders:fresh.dafs||[]).find(x=>x.id===d.id&&x.status===(externo?'ABERTO':'PENDENTE'));
+      if(!doc)throw Error(externo?'Pedido externo nao esta mais aberto.':'DAF nao esta mais pendente.');
       const ps=products();
       for(const item of doc.itens){const p=ps.find(x=>x.nome===item.nome);if(!p)throw Error('Produto nao encontrado no estoque: '+item.nome);if(!permiteNegativo()&&Number(item.qtd)>Number(p.qtd||0))throw Error('Estoque insuficiente: '+item.nome)}
       cart=doc.itens.map(x=>({nome:x.nome,qtd:Number(x.qtd),preco:Number(x.preco)}));
-      ugDAFSelecionado=doc.id;ultimoProduto=cart[cart.length-1]?.nome||null;render();ugDAFFechar();ugRegistrarFuncaoCaixa('DAF CARREGADO',doc.numero+' — '+doc.cliente);
+      ugDAFSelecionado=externo?null:doc.id;ugPedidoExternoSelecionado=externo?doc.id:null;ultimoProduto=cart[cart.length-1]?.nome||null;render();ugDAFFechar();ugRegistrarFuncaoCaixa(externo?'VENDA EXTERNA CARREGADA':'DAF CARREGADO',(doc.numero||doc.id)+' — '+doc.cliente);
      }catch(e){alert('Nao foi possivel carregar o DAF: '+e.message)}
     };box.appendChild(btn);
    }
@@ -253,6 +263,12 @@ window.ugAbrirBuscaDAF=async function(){
   document.getElementById('ugDAFFiltro').oninput=draw;draw();document.getElementById('ugDAFFiltro').focus();
  }catch(e){box.textContent='Falha ao consultar DAFs: '+e.message}
 };
+async function ugConfirmarPedidoExterno(){
+ if(!ugPedidoExternoSelecionado)return;
+ const id=ugPedidoExternoSelecionado;
+ try{await ugDAFApi('orders_complete',{id});ugPedidoExternoSelecionado=null}
+ catch(e){alert('Venda confirmada, mas pedido externo ainda consta aberto. Nao cobre novamente! Verifique com o administrador: '+e.message)}
+}
 async function ugDAFConfirmarVenda(){
  if(!ugDAFSelecionado)return;
  const id=ugDAFSelecionado;
