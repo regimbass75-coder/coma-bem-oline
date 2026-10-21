@@ -257,7 +257,24 @@ window.ugAbrirBuscaDAF=async function(){
       cart=doc.itens.map(x=>({nome:x.nome,qtd:Number(x.qtd),preco:Number(x.preco)}));
       ugDAFSelecionado=externo?null:doc.id;ugPedidoExternoSelecionado=externo?doc.id:null;ultimoProduto=cart[cart.length-1]?.nome||null;render();ugDAFFechar();ugRegistrarFuncaoCaixa(externo?'VENDA EXTERNA CARREGADA':'DAF CARREGADO',(doc.numero||doc.id)+' — '+doc.cliente);
      }catch(e){alert('Nao foi possivel carregar o DAF: '+e.message)}
-    };box.appendChild(btn);
+    };
+    const linha=document.createElement('div');linha.style.cssText='display:flex;gap:8px;align-items:stretch;margin-bottom:7px';
+    btn.style.flex='1';btn.style.marginBottom='0';linha.appendChild(btn);
+    if(d.origem==='VENDA EXTERNA'){
+      const excluir=document.createElement('button');excluir.type='button';excluir.textContent='Excluir pedido';excluir.style.cssText='background:#b4232d;color:white;border:0;border-radius:6px;padding:8px 12px;cursor:pointer';
+      excluir.onclick=async()=>{
+        if(!confirm('Excluir o pedido externo '+d.numero+'? Ele sairá dos pendentes, mas seu histórico será preservado.'))return;
+        excluir.disabled=true;
+        try{
+          await ugDAFApi('orders_cancel',{id:d.id});
+          const pos=docs.indexOf(d);if(pos>=0)docs.splice(pos,1);
+          draw();
+          ugRegistrarFuncaoCaixa('PEDIDO EXTERNO CANCELADO',String(d.numero));
+        }catch(e){alert('Não foi possível excluir o pedido: '+e.message);excluir.disabled=false}
+      };
+      linha.appendChild(excluir);
+    }
+    box.appendChild(linha);
    }
   };
   document.getElementById('ugDAFFiltro').oninput=draw;draw();document.getElementById('ugDAFFiltro').focus();
