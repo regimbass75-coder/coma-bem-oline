@@ -1920,7 +1920,13 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  }
  window.ugApplyModules=function(data){
    const mods=data&&data.modules;
-   if(!mods||!Array.isArray(mods.effective_modules)){allowed=new Set();}else{allowed=new Set(mods.effective_modules)}
+   if(!mods||!Array.isArray(mods.effective_modules)){
+     allowed=new Set();
+     console.warn('UniGestor: servidor não enviou lista válida de permissões; módulos protegidos permanecem bloqueados.');
+   }else{
+     allowed=new Set(mods.effective_modules.map(x=>String(x).trim()));
+     console.info('UniGestor: permissões recebidas:',[...allowed]);
+   }
    enforce();
  };
  document.addEventListener('click',e=>{
