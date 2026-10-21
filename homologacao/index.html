@@ -2471,8 +2471,8 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
  const botao=document.getElementById('ugAbrirDAFVisual');
  if(!botao)return;
  botao.onclick=()=>{
-  const area=document.getElementById('VENDA_DAF');
-  if(area){document.querySelector('[data-v="VENDA_DAF"]')?.click();area.scrollIntoView({behavior:'smooth'});}
+  const win=window.open('./daf.html','ug_daf_prevenda','width=1300,height=850,resizable=yes,scrollbars=yes');
+  if(!win)alert('Permita a abertura de janelas para utilizar o DAF.');
  };
 })();
 </script></body></html>');
