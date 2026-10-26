@@ -1860,7 +1860,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
 (()=>{
  const sectionModules={
  'INÍCIO':['Relatórios'],'VENDA_CONSULTA':[],'VENDA_PROMOCOES':['PDV/Vendas'],'VENDA_ACOMPANHAMENTO':['PDV/Vendas','Relatórios'],'VENDA_INDICADORES':['Relatórios'],'VENDA_CAIXA_FUNCOES':['Caixa'],'VENDA_DAF':['PDV/Vendas'],'VENDA_ORCAMENTOS':[],'VENDA_ORDENS_SERVICO':[],
- 'VENDA_EXTERNA':['Venda Externa'],'PDV':['PDV/Vendas'],'MESAS':['Mesas'],'COMANDAS':['Comandas'],'PEDIDOS':['Pedidos'],'COZINHA':['Cozinha/KDS'],'RETIRADA':['Pedidos','Delivery'],
+ 'VENDA_EXTERNA':['Venda Externa'],'PDV':['PDV/Vendas'],'MESAS':['Mesas'],'COMANDAS':['Comandas'],'PEDIDOS':['Pedidos'],'COZINHA':['Cozinha/KDS'],'RETIRADA':['Pedidos','Delivery'],'TROCAS_DEVOLUCOES':['PDV/Vendas','Financeiro'],
  'CAIXA':['Caixa'],'FINANCEIRO':['Financeiro'],'MONITOR_VENDAS':['Financeiro'],'CONTAS':['Financeiro'],'RELATÓRIOS':['Relatórios'],
  'CADASTROS':['Clientes'],'ESTOQUE':['Produtos','Estoque'],'FISCAL':['Produtos','Estoque'],'USUARIOS':['Usuários/Permissões'],'COMISSOES':['Comissões'],
  'GARCOM':['Garçom Mobile'],'DELIVERY':['Delivery'],'PRODUCAO':['Cozinha/KDS'],'CARDAPIO':['Produtos'],
@@ -1873,7 +1873,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
    if(allowed===null)return;
    document.querySelectorAll('nav [data-v]').forEach(el=>{el.hidden=!permitted(el.dataset.v);el.style.display=permitted(el.dataset.v)?'':'none'});
    const menuGroups={menuVenda:['VENDA_CONSULTA','VENDA_PROMOCOES','VENDA_ACOMPANHAMENTO','VENDA_INDICADORES','VENDA_CAIXA_FUNCOES','VENDA_DAF','VENDA_ORCAMENTOS','VENDA_ORDENS_SERVICO','VENDA_EXTERNA','PDV'],
-     atendMenu:['MESAS','COMANDAS','PEDIDOS','COZINHA','RETIRADA'],finMenu:['CAIXA','FINANCEIRO','MONITOR_VENDAS','CONTAS','RELATÓRIOS'],
+     atendMenu:['MESAS','COMANDAS','PEDIDOS','COZINHA','RETIRADA'],ferramentasMenu:['TROCAS_DEVOLUCOES'],finMenu:['CAIXA','FINANCEIRO','MONITOR_VENDAS','CONTAS','RELATÓRIOS'],
      cadMenu:['CADASTROS','ESTOQUE','FISCAL','USUARIOS','COMISSOES'],opMenu:['GARCOM','DELIVERY','PRODUCAO','CARDAPIO'],
      gestMenu:['PROPRIETARIO','CONTAS','HISTORICO','FECHAMENTO','AUDITORIA','CANCELAMENTOS'],
      cfgMenu:['CONFIG','PROPAGANDA','IMPRESSAO','PAGAMENTOS','SINCRONIZACAO','BACKUP','ATUALIZAR']};
