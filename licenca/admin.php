@@ -349,7 +349,7 @@ function aplicarModelo(){
 async function atualizarCentral(){
  const f=document.getElementById('pacoteAtualizacao').files[0],s=document.getElementById('statusAtualizacao');
  if(!f){alert('Selecione o ZIP oficial da nova versão.');return}
- if(!confirm('Será criado um backup e a nova versão será instalada. Continuar?'))return;
+ if(!confirm('Este ambiente Render usa dois serviços separados. O ZIP de produção não pode ser instalado automaticamente aqui. Deseja apenas verificar a compatibilidade do pacote?'))return;
  s.textContent='Enviando e atualizando...';
  const fd=new FormData();fd.append('pacote',f);
  try{const tokenResponse=await fetch('ug_master_csrf.php',{credentials:'same-origin',cache:'no-store'});
