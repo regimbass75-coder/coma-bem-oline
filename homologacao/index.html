@@ -362,6 +362,7 @@ body.login-page,
 <button data-v="PEDIDOS">🧾 Pedidos</button>
 <button data-v="COZINHA">👨‍🍳 Cozinha</button>
 <button data-v="RETIRADA">📦 Retirada / Entrega</button>
+<button data-v="TROCAS_DEVOLUCOES">🔄 Trocas e Devoluções</button>
 </div>
 
 <button class="menu-group" type="button" onclick="toggleMenu('finMenu',this)">💰 Financeiro <span>▾</span></button>
@@ -422,6 +423,22 @@ body.login-page,
 </div>
 </div>
 </nav></aside><main class="wrap">
+<section id="TROCAS_DEVOLUCOES" class="hide">
+<div class="card" style="padding:22px;max-width:1050px">
+<h2>🔄 Trocas e Devoluções</h2>
+<p class="muted">Atendimento de pós-venda — ambiente de homologação. Nenhuma movimentação é feita sem autorização e confirmação no servidor.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+<label>Número da venda original<input id="ugTrocaVenda" placeholder="Informe o número do pedido"></label>
+<label>Cliente<input id="ugTrocaCliente" placeholder="Nome do cliente"></label>
+<label>Tipo de atendimento<select id="ugTrocaTipo"><option value="TROCA">Troca por outro produto</option><option value="DEVOLUCAO">Devolução</option></select></label>
+<label>Motivo<input id="ugTrocaMotivo" placeholder="Descreva o motivo"></label>
+</div>
+<p><strong>Etapas previstas:</strong> localizar venda, conferir itens e quantidades, autorizar pelo gerente/proprietário, calcular diferença ou crédito, movimentar estoque e registrar auditoria.</p>
+<div role="status" style="padding:14px;border:1px solid #d5dfed;border-radius:8px;background:#f7faff;color:#243b5a">
+<strong>Integração financeira e de estoque pendente.</strong> A efetivação está bloqueada para evitar devoluções fictícias ou movimentações inconsistentes.
+</div>
+<button type="button" disabled title="Aguardando integração e validação do servidor">Confirmar troca ou devolução — indisponível</button>
+</div></section>
 <section id="VENDA_EXTERNA" class="hide"><div class="ve-wrap"><h2>📱 Venda Externa</h2><p class="muted">Pedidos, consulta de estoque e clientes para atendimento pelo celular.</p><div class="ve-tabs"><button type="button" data-ve-tab="pedidos" class="ve-active">🧾 Pedidos</button><button type="button" data-ve-tab="estoque">🔎 Buscar Produtos</button><button type="button" data-ve-tab="clientes">👤 Clientes</button></div><div id="ve-pedidos" class="ve-panel"><div class="ve-card"><h3>Novo pedido externo</h3><label>Cliente cadastrado ou nome do cliente<input id="veCliente" list="veClientes" placeholder="Pesquise ou digite o cliente"></label><datalist id="veClientes"></datalist><label>Observações<input id="veObs" placeholder="Informações para entrega ou atendimento"></label><div class="ve-search"><input id="veBuscaPedido" placeholder="Buscar produto por nome, código ou barras"><button type="button" id="veBtnBuscaPedido">Buscar</button></div><div id="veResultadosPedido" class="ve-results"></div><div id="veCarrinho"></div><h3>Total: <span id="veTotal">R$ 0,00</span></h3><div class="ve-actions"><button type="button" id="veSalvar">Salvar pedido</button><button type="button" id="veFinalizar">Finalizar no PDV</button><button type="button" id="veLimpar" class="ve-secondary">Novo pedido</button></div><small>Pedidos externos são rascunhos locais até a finalização no PDV. Não lançam financeiro nem baixam estoque sozinhos.</small></div><div class="ve-card"><h3>Pedidos externos salvos</h3><div id="veListaPedidos"></div></div></div><div id="ve-estoque" class="ve-panel" hidden><div class="ve-card"><h3>Consulta de produtos e estoque</h3><input id="veBuscaEstoque" placeholder="Nome, código ou código de barras"><div id="veListaEstoque" class="ve-results"></div></div></div><div id="ve-clientes" class="ve-panel" hidden><div class="ve-card"><h3>Consultar clientes</h3><input id="veBuscaCliente" placeholder="Buscar cliente por nome, telefone ou documento"><div id="veListaClientes" class="ve-results"></div><div class="ve-actions"><button type="button" id="veAbrirCadastro">Abrir cadastro completo de clientes</button></div><small>O cadastro completo já existente será aberto sem criar um segundo banco de clientes.</small></div></div></div></section><section id="VENDA_DAF" class="hide"><div class="ug-daf-caixa"><div class="ug-daf-top"><strong>UniGestor</strong><span>DAF — PRÉ-VENDA</span><small>SEM PAGAMENTO</small></div><div class="ug-daf-corpo"><aside class="ug-daf-lateral"><img src="./logo-unigestor.png" alt="UniGestor" style="max-width:100%;max-height:180px;object-fit:contain"><h2>DAF</h2><p>Documento auxiliar interno</p><p>Não movimenta caixa nem estoque</p></aside><div class="ug-daf-principal"><div class="ug-daf-destaque"><input id="dafCodigoBusca" placeholder="DIGITE OU LEIA O CÓDIGO DE BARRAS" aria-label="Código de barras ou quantidade asterisco código"><div class="ug-daf-metricas"><div><small>QUANTIDADE</small><b id="dafDestaqueQtd">—</b></div><div><small>PREÇO UNITÁRIO</small><b id="dafDestaqueUnit">—</b></div><div><small>PREÇO TOTAL</small><b id="dafDestaqueValor">—</b></div></div></div><div class="ug-daf-lista"><div id="dafItens"></div></div><div class="ug-daf-cliente"><label>CLIENTE <input id="dafCliente" class="inp" maxlength="120" placeholder="Nome do cliente" autocomplete="off"></label></div><div class="ug-daf-rodape"><button type="button" class="btn" onclick="ugDAFAdicionar()">F2 — Buscar produto</button><button type="button" class="btn green" onclick="ugDAFSalvar()">F9 — SALVAR DAF</button><b id="dafTotal">Total: R$ 0,00</b></div><p id="dafAviso" class="muted"></p></div></div></div><div class="panel"><h3>DAFs aguardando caixa</h3><button type="button" class="btn" onclick="ugDAFListar()">Atualizar lista</button><div id="dafLista"></div></div></section><section id="VENDA_ORCAMENTOS" class="hide"><div class="uvdoc"><h2>Orçamentos</h2><p>Cadastre, consulte, imprima e acompanhe orçamentos.</p><div class="uv-card"><div class="uv-grid">
 <label>Número<input id="ORCAMENTOS_numero" readonly placeholder="Gerado ao salvar"></label>
 <label>Cliente<input id="ORCAMENTOS_cliente" list="ORCAMENTOS_clientes" placeholder="Nome do cliente"><datalist id="ORCAMENTOS_clientes"></datalist></label>
