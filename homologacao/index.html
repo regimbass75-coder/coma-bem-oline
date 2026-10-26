@@ -429,21 +429,38 @@ body.login-page,
 </div>
 </nav></aside><main class="wrap">
 <section id="TROCAS_DEVOLUCOES" class="hide">
-<div class="card" style="padding:22px;max-width:1050px">
-<h2>🔄 Trocas e Devoluções</h2>
-<p class="muted">Atendimento de pós-venda — ambiente de homologação. Nenhuma movimentação é feita sem autorização e confirmação no servidor.</p>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-<label>Número da venda original<input id="ugTrocaVenda" placeholder="Informe o número do pedido"></label>
-<label>Cliente<input id="ugTrocaCliente" placeholder="Nome do cliente" readonly></label>
-<label>Tipo de atendimento<select id="ugTrocaTipo"><option value="TROCA">Troca por outro produto</option><option value="DEVOLUCAO">Devolução</option></select></label>
-<label>Motivo<input id="ugTrocaMotivo" placeholder="Descreva o motivo"></label>
+<style>
+#TROCAS_DEVOLUCOES .ugt-header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+#TROCAS_DEVOLUCOES h2{margin:0;color:#142d50;font-size:27px}
+#TROCAS_DEVOLUCOES .ugt-subtitle{color:#5c7695;margin:5px 0 26px}
+#TROCAS_DEVOLUCOES .ugt-new{background:#4e35d8;color:white;border:2px solid #efb72f;border-radius:9px;padding:12px 22px;font-weight:700;cursor:pointer}
+#TROCAS_DEVOLUCOES .ugt-search{background:white;border:1px solid #dbe3ee;padding:20px;margin:20px 0}
+#TROCAS_DEVOLUCOES input,#TROCAS_DEVOLUCOES select,#TROCAS_DEVOLUCOES textarea{padding:11px;border:1px solid #d9e2ed;border-radius:6px;max-width:100%;box-sizing:border-box}
+#TROCAS_DEVOLUCOES .ugt-search input{width:min(650px,100%)}
+#TROCAS_DEVOLUCOES table{width:100%;border-collapse:collapse;background:white}
+#TROCAS_DEVOLUCOES th,#TROCAS_DEVOLUCOES td{padding:13px 15px;border-bottom:1px solid #e0e6ef;text-align:left}
+#TROCAS_DEVOLUCOES th{font-size:12px;color:#58718e}
+#TROCAS_DEVOLUCOES .ugt-form{background:white;border:1px solid #dbe3ee;padding:22px;margin:20px 0}
+#TROCAS_DEVOLUCOES .ugt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:15px}
+#TROCAS_DEVOLUCOES label{display:flex;flex-direction:column;gap:7px;font-weight:600}
+#TROCAS_DEVOLUCOES .ugt-note{background:#f4f7ff;border:1px solid #dbe3ee;padding:14px;border-radius:6px;margin:15px 0}
+</style>
+<div class="ugt-header"><div><h2>Trocas e Devoluções</h2><p class="ugt-subtitle">Rastreie produtos devolvidos, estoque, créditos e estornos financeiros</p></div><button type="button" class="ugt-new" onclick="ugTrocaAbrir()">+ Lançar troca</button></div>
+<div class="ugt-search"><input id="ugtFiltro" placeholder="Buscar por cliente, cupom, OS, Pedido ou número da troca..." oninput="ugTrocaListar()"></div>
+<div style="overflow:auto"><table><thead><tr><th>NÚMERO</th><th>ORIGEM</th><th>CLIENTE</th><th>DATA</th><th>VALOR</th><th>STATUS</th><th>AÇÕES</th></tr></thead><tbody id="ugtLista"><tr><td colspan="7">Nenhuma troca ou devolução registrada.</td></tr></tbody></table></div>
+<div id="ugtForm" class="ugt-form hide"><h3>Nova troca ou devolução</h3>
+<div class="ugt-grid">
+<label>Cliente<select id="ugTrocaCliente"><option value="">Selecione um cliente</option></select></label>
+<label>Número da venda original<input id="ugTrocaVenda" placeholder="Número da venda ou pedido"></label>
+<label>Operação<select id="ugTrocaTipo"><option value="TROCA">Trocar por outro produto</option><option value="CREDITO">Gerar crédito para o cliente</option><option value="DEVOLUCAO">Devolução / estorno</option></select></label>
+<label>Motivo<input id="ugTrocaMotivo" placeholder="Motivo da troca ou devolução"></label>
 </div>
-<p><button type="button" id="ugTrocaBuscar" onclick="ugBuscarVendaOriginal()">🔎 Buscar venda original</button></p><div id="ugTrocaResultado" role="status" aria-live="polite"></div><p><strong>Etapas previstas:</strong> localizar venda, conferir itens e quantidades, autorizar pelo gerente/proprietário, calcular diferença ou crédito, movimentar estoque e registrar auditoria.</p>
-<div role="status" style="padding:14px;border:1px solid #d5dfed;border-radius:8px;background:#f7faff;color:#243b5a">
-<strong>Integração financeira e de estoque pendente.</strong> A efetivação está bloqueada para evitar devoluções fictícias ou movimentações inconsistentes.
+<p><button type="button" onclick="ugBuscarVendaOriginal()">🔎 Buscar venda original</button> <button type="button" onclick="document.getElementById('ugtForm').classList.add('hide')">Cancelar</button></p>
+<div id="ugTrocaResultado" aria-live="polite"></div>
+<div class="ugt-note"><strong>Modo de consulta:</strong> a busca da venda está disponível para teste. A confirmação da troca, crédito ou estorno depende de autorização e integração segura com estoque e financeiro.</div>
+<button type="button" disabled>Confirmar operação — aguardando integração</button>
 </div>
-<button type="button" disabled title="Aguardando integração e validação do servidor">Confirmar troca ou devolução — indisponível</button>
-</div></section>
+</section>
 <section id="VENDA_EXTERNA" class="hide"><div class="ve-wrap"><h2>📱 Venda Externa</h2><p class="muted">Pedidos, consulta de estoque e clientes para atendimento pelo celular.</p><div class="ve-tabs"><button type="button" data-ve-tab="pedidos" class="ve-active">🧾 Pedidos</button><button type="button" data-ve-tab="estoque">🔎 Buscar Produtos</button><button type="button" data-ve-tab="clientes">👤 Clientes</button></div><div id="ve-pedidos" class="ve-panel"><div class="ve-card"><h3>Novo pedido externo</h3><label>Cliente cadastrado ou nome do cliente<input id="veCliente" list="veClientes" placeholder="Pesquise ou digite o cliente"></label><datalist id="veClientes"></datalist><label>Observações<input id="veObs" placeholder="Informações para entrega ou atendimento"></label><div class="ve-search"><input id="veBuscaPedido" placeholder="Buscar produto por nome, código ou barras"><button type="button" id="veBtnBuscaPedido">Buscar</button></div><div id="veResultadosPedido" class="ve-results"></div><div id="veCarrinho"></div><h3>Total: <span id="veTotal">R$ 0,00</span></h3><div class="ve-actions"><button type="button" id="veSalvar">Salvar pedido</button><button type="button" id="veFinalizar">Finalizar no PDV</button><button type="button" id="veLimpar" class="ve-secondary">Novo pedido</button></div><small>Pedidos externos são rascunhos locais até a finalização no PDV. Não lançam financeiro nem baixam estoque sozinhos.</small></div><div class="ve-card"><h3>Pedidos externos salvos</h3><div id="veListaPedidos"></div></div></div><div id="ve-estoque" class="ve-panel" hidden><div class="ve-card"><h3>Consulta de produtos e estoque</h3><input id="veBuscaEstoque" placeholder="Nome, código ou código de barras"><div id="veListaEstoque" class="ve-results"></div></div></div><div id="ve-clientes" class="ve-panel" hidden><div class="ve-card"><h3>Consultar clientes</h3><input id="veBuscaCliente" placeholder="Buscar cliente por nome, telefone ou documento"><div id="veListaClientes" class="ve-results"></div><div class="ve-actions"><button type="button" id="veAbrirCadastro">Abrir cadastro completo de clientes</button></div><small>O cadastro completo já existente será aberto sem criar um segundo banco de clientes.</small></div></div></div></section><section id="VENDA_DAF" class="hide"><div class="ug-daf-caixa"><div class="ug-daf-top"><strong>UniGestor</strong><span>DAF — PRÉ-VENDA</span><small>SEM PAGAMENTO</small></div><div class="ug-daf-corpo"><aside class="ug-daf-lateral"><img src="./logo-unigestor.png" alt="UniGestor" style="max-width:100%;max-height:180px;object-fit:contain"><h2>DAF</h2><p>Documento auxiliar interno</p><p>Não movimenta caixa nem estoque</p></aside><div class="ug-daf-principal"><div class="ug-daf-destaque"><input id="dafCodigoBusca" placeholder="DIGITE OU LEIA O CÓDIGO DE BARRAS" aria-label="Código de barras ou quantidade asterisco código"><div class="ug-daf-metricas"><div><small>QUANTIDADE</small><b id="dafDestaqueQtd">—</b></div><div><small>PREÇO UNITÁRIO</small><b id="dafDestaqueUnit">—</b></div><div><small>PREÇO TOTAL</small><b id="dafDestaqueValor">—</b></div></div></div><div class="ug-daf-lista"><div id="dafItens"></div></div><div class="ug-daf-cliente"><label>CLIENTE <input id="dafCliente" class="inp" maxlength="120" placeholder="Nome do cliente" autocomplete="off"></label></div><div class="ug-daf-rodape"><button type="button" class="btn" onclick="ugDAFAdicionar()">F2 — Buscar produto</button><button type="button" class="btn green" onclick="ugDAFSalvar()">F9 — SALVAR DAF</button><b id="dafTotal">Total: R$ 0,00</b></div><p id="dafAviso" class="muted"></p></div></div></div><div class="panel"><h3>DAFs aguardando caixa</h3><button type="button" class="btn" onclick="ugDAFListar()">Atualizar lista</button><div id="dafLista"></div></div></section><section id="VENDA_ORCAMENTOS" class="hide"><div class="uvdoc"><h2>Orçamentos</h2><p>Cadastre, consulte, imprima e acompanhe orçamentos.</p><div class="uv-card"><div class="uv-grid">
 <label>Número<input id="ORCAMENTOS_numero" readonly placeholder="Gerado ao salvar"></label>
 <label>Cliente<input id="ORCAMENTOS_cliente" list="ORCAMENTOS_clientes" placeholder="Nome do cliente"><datalist id="ORCAMENTOS_clientes"></datalist></label>
@@ -2535,38 +2552,7 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
     const janela=window.open('','_blank');
     if(!janela){alert('Permita a abertura da janela para gerar o PDF.');return}
     janela.document.open();
-    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer><script>
-async function ugBuscarVendaOriginal(){
- const campo=document.getElementById('ugTrocaVenda'),resultado=document.getElementById('ugTrocaResultado');
- if(!campo||!resultado)return;
- const termo=String(campo.value||'').trim().toLowerCase();
- resultado.textContent='';
- if(!termo){resultado.textContent='Informe o número ou identificador da venda.';campo.focus();return}
- resultado.textContent='Consultando vendas da empresa...';
- try{
-  if(typeof window.ugSyncSalesNow==='function')await window.ugSyncSalesNow();
-  else if(typeof vendas!=='undefined'&&typeof window.__cbRestaurante!=='undefined'&&window.__cbRestaurante){
-   const resp=await fetch('/licenca/api.php?action=sales_list',{credentials:'include',cache:'no-store'});
-   if(resp.ok){const data=await resp.json();if(data.ok&&String(data.restaurant_id)===String(window.__cbRestaurante.id)&&Array.isArray(data.sales))vendas=data.sales}
-  }
- }catch(e){/* Consulta local ainda disponível; não altera vendas. */}
- const lista=typeof vendas!=='undefined'&&Array.isArray(vendas)?vendas:[];
- const venda=lista.find(v=>[v.id,v.numero,v.numero_venda,v.pedido,v.codigo,v.sale_id].filter(x=>x!==undefined&&x!==null).some(x=>String(x).toLowerCase()===termo));
- if(!venda){resultado.textContent='Venda não encontrada nesta empresa. Confira o número na Consulta de Vendas.';return}
- const cliente=String(venda.clienteNome||venda.cliente||venda.nomeCliente||'');
- document.getElementById('ugTrocaCliente').value=cliente;
- const title=document.createElement('h3');title.textContent='Venda encontrada: '+String(venda.numero||venda.id||termo);
- resultado.appendChild(title);
- const info=document.createElement('p');info.textContent='Cliente: '+(cliente||'Não identificado')+' | Total: R$ '+Number(venda.total||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});resultado.appendChild(info);
- const itens=Array.isArray(venda.itens)?venda.itens:Array.isArray(venda.items)?venda.items:[];
- if(!itens.length){const p=document.createElement('p');p.textContent='Esta venda não contém itens detalhados disponíveis para consulta.';resultado.appendChild(p);return}
- const table=document.createElement('table');table.style.width='100%';
- const head=document.createElement('tr');['Produto','Quantidade','Valor unitário'].forEach(label=>{const th=document.createElement('th');th.textContent=label;head.appendChild(th)});table.appendChild(head);
- itens.forEach(item=>{const tr=document.createElement('tr');[item.nome||item.produto||item.descricao||item.codigo||'Produto',item.quantidade??item.qtd??1,'R$ '+Number(item.preco||item.valorUnitario||item.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})].forEach(v=>{const td=document.createElement('td');td.textContent=String(v);tr.appendChild(td)});table.appendChild(tr)});
- resultado.appendChild(table);
-}
-</script>
-</body></html>');
+    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer></body></html>');
     janela.document.close();
     janela.focus();
   };
@@ -3225,5 +3211,47 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   }
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',repair);else repair();
+})();
+</script><script>
+(function(){
+const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+window.ugTrocaListar=function(){
+ const t=document.getElementById('ugtLista');if(!t)return;
+ const f=(document.getElementById('ugtFiltro')?.value||'').toLowerCase();
+ // No fake records: only confirmed server transactions will be listed.
+ t.replaceChildren();const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=7;cell.textContent=f?'Nenhuma troca ou devolução encontrada.':'Nenhuma troca ou devolução registrada.';row.appendChild(cell);t.appendChild(row);
+};
+window.ugTrocaAbrir=function(){
+ const form=document.getElementById('ugtForm');if(!form)return;form.classList.remove('hide');
+ const sel=document.getElementById('ugTrocaCliente');sel.replaceChildren();
+ const empty=document.createElement('option');empty.value='';empty.textContent='Selecione um cliente';sel.appendChild(empty);
+ const data=typeof clientes!=='undefined'&&Array.isArray(clientes)?clientes:[];
+ data.forEach((c,i)=>{const opt=document.createElement('option');opt.value=String(c.id||c.uid||i);opt.textContent=String(c.nome||c.razaoSocial||c.name||'Cliente '+(i+1));sel.appendChild(opt)});
+ document.getElementById('ugTrocaVenda').focus();
+};
+window.ugBuscarVendaOriginal=async function(){
+ const field=document.getElementById('ugTrocaVenda'),out=document.getElementById('ugTrocaResultado');
+ if(!field||!out)return;out.replaceChildren();
+ const term=String(field.value||'').trim().toLowerCase();if(!term){out.textContent='Informe o número da venda.';return}
+ out.textContent='Buscando venda na empresa...';
+ let rows=[];
+ try{
+  const res=await fetch('/licenca/api.php?action=sales_list',{credentials:'include',cache:'no-store'});
+  if(!res.ok)throw Error('Consulta indisponível');
+  const d=await res.json();if(!d.ok||!Array.isArray(d.sales))throw Error(d.erro||'Consulta indisponível');
+  if(!window.__cbRestaurante||String(d.restaurant_id)!==String(window.__cbRestaurante.id))throw Error('Empresa não identificada');
+  rows=d.sales;
+ }catch(err){out.textContent='Não foi possível consultar as vendas no servidor: '+err.message;return}
+ const v=rows.find(x=>[x.id,x.numero,x.numero_venda,x.pedido,x.codigo,x.sale_id].some(y=>y!=null&&String(y).toLowerCase()===term));
+ if(!v){out.textContent='Venda não encontrada. Confira o identificador na Consulta de Vendas.';return}
+ out.replaceChildren();
+ const h=document.createElement('h4');h.textContent='Venda localizada: '+String(v.numero||v.id);out.appendChild(h);
+ const p=document.createElement('p');p.textContent='Cliente: '+String(v.clienteNome||v.cliente||v.nomeCliente||'Não identificado')+' | Total: '+money(v.total);out.appendChild(p);
+ const items=Array.isArray(v.itens)?v.itens:Array.isArray(v.items)?v.items:[];
+ if(!items.length){const p=document.createElement('p');p.textContent='Sem itens detalhados nesta venda.';out.appendChild(p);return}
+ const table=document.createElement('table');const head=document.createElement('tr');
+ ['Produto','Quantidade','Valor unitário'].forEach(k=>{const th=document.createElement('th');th.textContent=k;head.appendChild(th)});table.appendChild(head);
+ items.forEach(x=>{const tr=document.createElement('tr');[x.nome||x.produto||x.descricao||x.codigo||'Produto',x.quantidade??x.qtd??1,money(x.preco||x.valorUnitario||x.valor)].forEach(k=>{const td=document.createElement('td');td.textContent=String(k);tr.appendChild(td)});table.appendChild(tr)});out.appendChild(table);
+};
 })();
 </script></body></html>
