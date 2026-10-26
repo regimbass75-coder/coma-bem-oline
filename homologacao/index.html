@@ -434,11 +434,11 @@ body.login-page,
 <p class="muted">Atendimento de pós-venda — ambiente de homologação. Nenhuma movimentação é feita sem autorização e confirmação no servidor.</p>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
 <label>Número da venda original<input id="ugTrocaVenda" placeholder="Informe o número do pedido"></label>
-<label>Cliente<input id="ugTrocaCliente" placeholder="Nome do cliente"></label>
+<label>Cliente<input id="ugTrocaCliente" placeholder="Nome do cliente" readonly></label>
 <label>Tipo de atendimento<select id="ugTrocaTipo"><option value="TROCA">Troca por outro produto</option><option value="DEVOLUCAO">Devolução</option></select></label>
 <label>Motivo<input id="ugTrocaMotivo" placeholder="Descreva o motivo"></label>
 </div>
-<p><strong>Etapas previstas:</strong> localizar venda, conferir itens e quantidades, autorizar pelo gerente/proprietário, calcular diferença ou crédito, movimentar estoque e registrar auditoria.</p>
+<p><button type="button" id="ugTrocaBuscar" onclick="ugBuscarVendaOriginal()">🔎 Buscar venda original</button></p><div id="ugTrocaResultado" role="status" aria-live="polite"></div><p><strong>Etapas previstas:</strong> localizar venda, conferir itens e quantidades, autorizar pelo gerente/proprietário, calcular diferença ou crédito, movimentar estoque e registrar auditoria.</p>
 <div role="status" style="padding:14px;border:1px solid #d5dfed;border-radius:8px;background:#f7faff;color:#243b5a">
 <strong>Integração financeira e de estoque pendente.</strong> A efetivação está bloqueada para evitar devoluções fictícias ou movimentações inconsistentes.
 </div>
@@ -2535,7 +2535,38 @@ window.addEventListener("load",()=>setTimeout(renderPromocoes,100));
     const janela=window.open('','_blank');
     if(!janela){alert('Permita a abertura da janela para gerar o PDF.');return}
     janela.document.open();
-    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer></body></html>');
+    janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Acompanhamento de Vendas - '+escape(empresa)+'</title><style>@page{size:A4;margin:16mm}body{font:12px Arial,sans-serif;color:#202b3b}header{display:flex;align-items:center;gap:16px;border-bottom:2px solid #173b68;padding-bottom:14px;margin-bottom:16px}header img{width:95px;height:75px;object-fit:contain}h1{font-size:20px;margin:0 0 5px}h2{font-size:15px;margin:0}.info{display:flex;justify-content:space-between;gap:20px;padding:12px 0;font-size:13px}.total{font-size:18px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border-bottom:1px solid #d6dce5;padding:8px 6px;text-align:left}th{background:#eaf0f8;color:#173b68}.num{text-align:right}thead{display:table-header-group}tr{break-inside:avoid}footer{margin-top:22px;color:#667;font-size:10px}.no-print{margin-bottom:16px;padding:10px;background:#eef}@media print{.no-print{display:none}}</style></head><body><div class="no-print">Selecione <b>Salvar como PDF</b> na janela de impressão. <button onclick="window.print()">Imprimir / Salvar PDF</button></div><header><img src="./logo-unigestor.png" alt="Logomarca"><div><h1>'+escape(empresa)+'</h1><h2>Acompanhamento de Vendas</h2></div></header><div class="info"><div><b>Período:</b> '+escape(data(inicio))+' a '+escape(data(fim))+'<div><b>Vendas:</b> '+vendas.length+'</div></div><div class="total">Total vendido: '+uvaFmt(total)+'</div></div><h2>Produtos vendidos — ranking completo</h2><table><thead><tr><th>Pos.</th><th>Produto</th><th class="num">Qtd.</th><th class="num">Preço médio</th><th class="num">Total</th></tr></thead><tbody>'+(linhas||'<tr><td colspan="5">Nenhum produto vendido no período.</td></tr>')+'</tbody></table><footer>Relatório gerado pelo UniGestor em '+new Date().toLocaleString('pt-BR')+'</footer><script>
+async function ugBuscarVendaOriginal(){
+ const campo=document.getElementById('ugTrocaVenda'),resultado=document.getElementById('ugTrocaResultado');
+ if(!campo||!resultado)return;
+ const termo=String(campo.value||'').trim().toLowerCase();
+ resultado.textContent='';
+ if(!termo){resultado.textContent='Informe o número ou identificador da venda.';campo.focus();return}
+ resultado.textContent='Consultando vendas da empresa...';
+ try{
+  if(typeof window.ugSyncSalesNow==='function')await window.ugSyncSalesNow();
+  else if(typeof vendas!=='undefined'&&typeof window.__cbRestaurante!=='undefined'&&window.__cbRestaurante){
+   const resp=await fetch('/licenca/api.php?action=sales_list',{credentials:'include',cache:'no-store'});
+   if(resp.ok){const data=await resp.json();if(data.ok&&String(data.restaurant_id)===String(window.__cbRestaurante.id)&&Array.isArray(data.sales))vendas=data.sales}
+  }
+ }catch(e){/* Consulta local ainda disponível; não altera vendas. */}
+ const lista=typeof vendas!=='undefined'&&Array.isArray(vendas)?vendas:[];
+ const venda=lista.find(v=>[v.id,v.numero,v.numero_venda,v.pedido,v.codigo,v.sale_id].filter(x=>x!==undefined&&x!==null).some(x=>String(x).toLowerCase()===termo));
+ if(!venda){resultado.textContent='Venda não encontrada nesta empresa. Confira o número na Consulta de Vendas.';return}
+ const cliente=String(venda.clienteNome||venda.cliente||venda.nomeCliente||'');
+ document.getElementById('ugTrocaCliente').value=cliente;
+ const title=document.createElement('h3');title.textContent='Venda encontrada: '+String(venda.numero||venda.id||termo);
+ resultado.appendChild(title);
+ const info=document.createElement('p');info.textContent='Cliente: '+(cliente||'Não identificado')+' | Total: R$ '+Number(venda.total||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});resultado.appendChild(info);
+ const itens=Array.isArray(venda.itens)?venda.itens:Array.isArray(venda.items)?venda.items:[];
+ if(!itens.length){const p=document.createElement('p');p.textContent='Esta venda não contém itens detalhados disponíveis para consulta.';resultado.appendChild(p);return}
+ const table=document.createElement('table');table.style.width='100%';
+ const head=document.createElement('tr');['Produto','Quantidade','Valor unitário'].forEach(label=>{const th=document.createElement('th');th.textContent=label;head.appendChild(th)});table.appendChild(head);
+ itens.forEach(item=>{const tr=document.createElement('tr');[item.nome||item.produto||item.descricao||item.codigo||'Produto',item.quantidade??item.qtd??1,'R$ '+Number(item.preco||item.valorUnitario||item.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})].forEach(v=>{const td=document.createElement('td');td.textContent=String(v);tr.appendChild(td)});table.appendChild(tr)});
+ resultado.appendChild(table);
+}
+</script>
+</body></html>');
     janela.document.close();
     janela.focus();
   };
