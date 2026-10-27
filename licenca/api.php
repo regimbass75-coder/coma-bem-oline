@@ -480,6 +480,57 @@ if(in_array($action,['credit_receipts_list','credit_receipt_pay'],true)){
   flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'receipts'=>$rows]);
  }catch(Throwable $e){error_log('[UniGestor] baixa de crédito: '.$e->getMessage());if(is_resource($fp))fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao gravar recebimento.'],503);}
 }
+// Solicitações de troca: registro pendente, sem crédito/estoque/estorno até aprovação e integração.
+if(in_array($action,['returns_list','returns_request'],true)){
+ start_app();
+ try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['PDV/Vendas','Financeiro','Caixa'],$perms)&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão.'],403);
+ if($action==='returns_request'&&$_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ if($action==='returns_list'&&$_SERVER['REQUEST_METHOD']!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ ensure_data();$dir=DATA_DIR.'/empresa-trocas';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+ if(!flock($fp,LOCK_EX)){fclose($fp);outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);}
+ rewind($fp);$raw=stream_get_contents($fp);$rows=$raw?json_decode($raw,true):[];
+ if(!is_array($rows)||!array_is_list($rows)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Registros inválidos.'],503);}
+ if($action==='returns_list'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'returns'=>$rows,'restaurant_id'=>$rid]);}
+ $body=file_get_contents('php://input');
+ if(strlen($body)>8192){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação muito grande.'],413);}
+ $v=json_decode($body,true);
+ $requestId=(string)($v['request_id']??'');$saleId=(string)($v['sale_id']??'');
+ $type=(string)($v['type']??'');$reason=trim((string)($v['reason']??''));
+ $items=$v['items']??null;
+ if(!preg_match('/^[a-zA-Z0-9_-]{12,100}$/D',$requestId)||!preg_match('/^[a-zA-Z0-9_-]{5,100}$/D',$saleId)||!in_array($type,['TROCA','CREDITO','DEVOLUCAO'],true)||$reason===''||strlen($reason)>500||!is_array($items)||count($items)<1||count($items)>100){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação inválida.'],400);}
+ foreach($rows as $row)if(($row['request_id']??'')===$requestId){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'duplicate'=>true,'request'=>$row]);}
+ $salesFile=DATA_DIR.'/empresa-vendas/'.hash('sha256',$rid).'.json';
+ $sales=json_decode(@file_get_contents($salesFile)?:'[]',true);
+ $sale=null;foreach((is_array($sales)?$sales:[]) as $candidate)if((string)($candidate['id']??'')===$saleId){$sale=$candidate;break;}
+ if(!$sale){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Venda original não encontrada.'],404);}
+ $sold=$sale['itens']??[];$selected=[];$total=0;
+ foreach($items as $item){
+  $idx=$item['index']??null;$qty=$item['qty']??null;
+  if(!is_int($idx)||!isset($sold[$idx])||!is_int($qty)||$qty<1){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Item inválido.'],400);}
+  $original=$sold[$idx];$max=(int)($original['quantidade']??$original['qtd']??0);
+  if($qty>$max){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Quantidade excede a venda.'],400);}
+  foreach($selected as $previous)if($previous['index']===$idx){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Item repetido.'],400);}
+  $price=(float)($original['preco']??$original['valorUnitario']??$original['valor']??0);
+  $selected[]=['index'=>$idx,'nome'=>substr((string)($original['nome']??$original['produto']??'Produto'),0,200),'qty'=>$qty,'unit_price'=>$price];
+  $total+=$qty*$price;
+ }
+ $row=['request_id'=>$requestId,'sale_id'=>$saleId,'client_id'=>substr((string)($v['client_id']??''),0,100),'client_name'=>substr((string)($sale['cliente']??$sale['clienteNome']??''),0,200),'type'=>$type,'reason'=>$reason,'items'=>$selected,'total'=>round($total,2),'status'=>'PENDENTE','created_at'=>date('c'),'user_id'=>(string)$actor['id'],'user_name'=>(string)($actor['name']??'')];
+ $rows[]=$row;$json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+ rewind($fp);$ok=fwrite($fp,$json)===strlen($json)&&ftruncate($fp,strlen($json))&&fflush($fp);
+ flock($fp,LOCK_UN);fclose($fp);
+ if(!$ok)outj(['ok'=>false,'erro'=>'Falha ao registrar solicitação.'],503);
+ outj(['ok'=>true,'request'=>$row]);
+}
 // Registro central de vendas: um arquivo independente por empresa, com trava
 // exclusiva e identificador idempotente. Nunca aceita restaurant_id do navegador.
 if(in_array($action,['sales_list','sales_create'],true)){
