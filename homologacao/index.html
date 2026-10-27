@@ -3232,7 +3232,7 @@ window.ugTrocaAbrir=function(){
 window.ugBuscarVendaOriginal=async function(){
  const field=document.getElementById('ugTrocaVenda'),out=document.getElementById('ugTrocaResultado');
  if(!field||!out)return;out.replaceChildren();
- const term=String(field.value||'').trim().toLowerCase();if(!term){out.textContent='Informe o número da venda.';return}
+ const term=String(field.value||'').trim().toLowerCase();
  out.textContent='Buscando venda na empresa...';
  let rows=[];
  try{
@@ -3242,8 +3242,13 @@ window.ugBuscarVendaOriginal=async function(){
   if(!window.__cbRestaurante||String(d.restaurant_id)!==String(window.__cbRestaurante.id))throw Error('Empresa não identificada');
   rows=d.sales;
  }catch(err){out.textContent='Não foi possível consultar as vendas no servidor: '+err.message;return}
- const v=rows.find(x=>[x.id,x.numero,x.numero_venda,x.pedido,x.codigo,x.sale_id].some(y=>y!=null&&String(y).toLowerCase()===term));
- if(!v){out.textContent='Venda não encontrada. Confira o identificador na Consulta de Vendas.';return}
+ const norm=x=>String(x??'').trim().toLowerCase().replace(/^#/, '');
+ const v=term&&rows.find(x=>[x.id,x.numero,x.numero_venda,x.pedido,x.codigo,x.sale_id,x.cupom,x.codigoCupom,x.numeroCupom,x.numeroPedido].some(y=>y!=null&&norm(y)===norm(term)));
+ if(!v){
+ out.textContent='Venda não encontrada com esse número. Selecione uma das vendas recentes abaixo ou confira o cupom na Consulta de Vendas.';
+ const recent=rows.slice().sort((a,b)=>String(b.registrado_em||b.data||'').localeCompare(String(a.registrado_em||a.data||''))).slice(0,20);
+ if(recent.length){const list=document.createElement('div');list.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:12px 0';
+ recent.forEach(x=>{const id=x.cupom||x.codigoCupom||x.id;if(!id)return;const btn=document.createElement('button');btn.type='button';btn.textContent=String(id)+' — '+String(x.cliente||x.clienteNome||'Venda')+' — '+money(x.total);btn.onclick=()=>{field.value=String(id);window.ugBuscarVendaOriginal()};list.appendChild(btn)});out.appendChild(list)}return}
  out.replaceChildren();
  const h=document.createElement('h4');h.textContent='Venda localizada: '+String(v.numero||v.id);out.appendChild(h);
  const p=document.createElement('p');p.textContent='Cliente: '+String(v.clienteNome||v.cliente||v.nomeCliente||'Não identificado')+' | Total: '+money(v.total);out.appendChild(p);
