@@ -3229,6 +3229,11 @@ window.ugTrocaAbrir=function(){
  data.forEach((c,i)=>{const opt=document.createElement('option');opt.value=String(c.id||c.uid||i);opt.textContent=String(c.nome||c.razaoSocial||c.name||'Cliente '+(i+1));sel.appendChild(opt)});
  document.getElementById('ugTrocaVenda').focus();
 };
+window.ugTrocaCalcular=function(){
+ let total=0,selected=0,invalid=false;
+ document.querySelectorAll('#ugTrocaResultado .ugt-item').forEach(c=>{if(!c.checked)return;const row=c.closest('tr'),qty=Number(row.querySelector('.ugt-qty').value),max=Number(row.dataset.max);if(!Number.isInteger(qty)||qty<1||qty>max){invalid=true;return}total+=qty*Number(row.dataset.price);selected++});
+ const out=document.getElementById('ugtTotalCredito');if(out)out.textContent=invalid?'Quantidade inválida: confira o limite vendido.':selected?'Produtos selecionados: '+selected+' | Valor estimado: '+money(total):'Selecione os produtos para calcular o valor da devolução.';
+};
 window.ugBuscarVendaOriginal=async function(){
  const field=document.getElementById('ugTrocaVenda'),out=document.getElementById('ugTrocaResultado');
  if(!field||!out)return;out.replaceChildren();
@@ -3255,8 +3260,17 @@ window.ugBuscarVendaOriginal=async function(){
  const items=Array.isArray(v.itens)?v.itens:Array.isArray(v.items)?v.items:[];
  if(!items.length){const p=document.createElement('p');p.textContent='Sem itens detalhados nesta venda.';out.appendChild(p);return}
  const table=document.createElement('table');const head=document.createElement('tr');
- ['Produto','Quantidade','Valor unitário'].forEach(k=>{const th=document.createElement('th');th.textContent=k;head.appendChild(th)});table.appendChild(head);
- items.forEach(x=>{const tr=document.createElement('tr');[x.nome||x.produto||x.descricao||x.codigo||'Produto',x.quantidade??x.qtd??1,money(x.preco||x.valorUnitario||x.valor)].forEach(k=>{const td=document.createElement('td');td.textContent=String(k);tr.appendChild(td)});table.appendChild(tr)});out.appendChild(table);
+ ['Selecionar','Produto','Quantidade vendida','Quantidade a devolver','Valor unitário'].forEach(k=>{const th=document.createElement('th');th.textContent=k;head.appendChild(th)});table.appendChild(head);
+ items.forEach((x,i)=>{
+ const tr=document.createElement('tr');const tdCheck=document.createElement('td'),check=document.createElement('input');check.type='checkbox';check.className='ugt-item';check.dataset.index=String(i);check.onchange=ugTrocaCalcular;tdCheck.appendChild(check);tr.appendChild(tdCheck);
+ const qty=Math.max(0,Number(x.quantidade??x.qtd??1)||0),price=Number(x.preco??x.valorUnitario??x.valor??0)||0;
+ const tdName=document.createElement('td');tdName.textContent=String(x.nome||x.produto||x.descricao||x.codigo||'Produto');tr.appendChild(tdName);
+ const tdQty=document.createElement('td');tdQty.textContent=String(qty);tr.appendChild(tdQty);
+ const tdReturn=document.createElement('td'),qtyInput=document.createElement('input');qtyInput.type='number';qtyInput.min='1';qtyInput.max=String(qty);qtyInput.step='1';qtyInput.value='1';qtyInput.style.width='85px';qtyInput.className='ugt-qty';qtyInput.oninput=ugTrocaCalcular;tdReturn.appendChild(qtyInput);tr.appendChild(tdReturn);
+ const tdPrice=document.createElement('td');tdPrice.textContent=money(price);tr.appendChild(tdPrice);
+ tr.dataset.price=String(price);tr.dataset.max=String(qty);table.appendChild(tr)
+ });out.appendChild(table);
+ const total=document.createElement('p');total.id='ugtTotalCredito';total.style.fontWeight='bold';total.textContent='Selecione os produtos para calcular o valor da devolução.';out.appendChild(total);
 };
 })();
 </script></body></html>
