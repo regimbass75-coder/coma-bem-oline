@@ -481,7 +481,7 @@ if(in_array($action,['credit_receipts_list','credit_receipt_pay'],true)){
  }catch(Throwable $e){error_log('[UniGestor] baixa de crédito: '.$e->getMessage());if(is_resource($fp))fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao gravar recebimento.'],503);}
 }
 // Solicitações de troca: registro pendente, sem crédito/estoque/estorno até aprovação e integração.
-if(in_array($action,['returns_list','returns_request'],true)){
+if(in_array($action,['returns_list','returns_request','returns_approve','returns_balance'],true)){
  start_app();
  try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
@@ -491,8 +491,8 @@ if(in_array($action,['returns_list','returns_request'],true)){
  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inativa.'],403);
  $perms=ug_effective_permissions($actor);
  if(!array_intersect(['PDV/Vendas','Financeiro','Caixa'],$perms)&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))outj(['ok'=>false,'erro'=>'Sem permissão.'],403);
- if($action==='returns_request'&&$_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
- if($action==='returns_list'&&$_SERVER['REQUEST_METHOD']!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ if(in_array($action,['returns_request','returns_approve'],true)&&$_SERVER['REQUEST_METHOD']!=='POST')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+ if(in_array($action,['returns_list','returns_balance'],true)&&$_SERVER['REQUEST_METHOD']!=='GET')outj(['ok'=>false,'erro'=>'Método inválido.'],405);
  ensure_data();$dir=DATA_DIR.'/empresa-trocas';
  if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
  $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
@@ -501,6 +501,49 @@ if(in_array($action,['returns_list','returns_request'],true)){
  rewind($fp);$raw=stream_get_contents($fp);$rows=$raw?json_decode($raw,true):[];
  if(!is_array($rows)||!array_is_list($rows)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Registros inválidos.'],503);}
  if($action==='returns_list'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'returns'=>$rows,'restaurant_id'=>$rid]);}
+ if($action==='returns_balance'){
+  $client=trim((string)($_GET['client_id']??''));
+  if($client===''||strlen($client)>100){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Cliente obrigatório.'],400);}
+  $balance=0;
+  foreach($rows as $entry)if(($entry['status']??'')==='APROVADA'&&($entry['type']??'')==='CREDITO'&&(string)($entry['client_id']??'')===$client)
+   $balance+=round((float)($entry['total']??0),2);
+  // Until redemption is atomic with the sales ledger, this endpoint reports issued credit only.
+  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'issued_credit'=>round($balance,2),'spendable'=>false,'restaurant_id'=>$rid]);
+ }
+ if($action==='returns_approve'){
+  if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true)){
+   flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Somente gerente ou administrador pode aprovar.'],403);
+  }
+  $input=json_decode(file_get_contents('php://input'),true);
+  $requestId=trim((string)($input['request_id']??''));
+  if(!preg_match('/^[a-zA-Z0-9_-]{12,100}$/D',$requestId)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação inválida.'],400);}
+  $idx=null;foreach($rows as $key=>$entry)if(($entry['request_id']??'')===$requestId){$idx=$key;break;}
+  if($idx===null){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação não encontrada.'],404);}
+  if(($rows[$idx]['status']??'')==='APROVADA'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'duplicate'=>true,'request'=>$rows[$idx]]);}
+  if(($rows[$idx]['status']??'')!=='PENDENTE'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação não está pendente.'],409);}
+  if(($rows[$idx]['type']??'')!=='CREDITO'){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Aprovação financeira disponível somente para crédito de troca.'],400);}
+  if(trim((string)($rows[$idx]['client_id']??''))===''){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação sem cliente identificado.'],400);}
+  // Never approve more than the original sale quantity across approved requests.
+  $sold=json_decode(@file_get_contents(DATA_DIR.'/empresa-vendas/'.hash('sha256',$rid).'.json')?:'[]',true);
+  $sale=null;foreach((is_array($sold)?$sold:[]) as $v)if((string)($v['id']??'')===(string)$rows[$idx]['sale_id']){$sale=$v;break;}
+  if(!$sale){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Venda original indisponível.'],409);}
+  foreach(($rows[$idx]['items']??[]) as $item){
+   $itemIdx=(int)($item['index']??-1);$original=$sale['itens'][$itemIdx]??null;
+   if(!$original){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Item original não encontrado.'],409);}
+   $soldQty=(int)($original['qtd']??$original['quantidade']??0);$already=0;
+   foreach($rows as $other)if(($other['status']??'')==='APROVADA'&&($other['sale_id']??'')===$rows[$idx]['sale_id'])
+    foreach(($other['items']??[]) as $otherItem)if((int)($otherItem['index']??-1)===$itemIdx)$already+=(int)($otherItem['qty']??0);
+   if($soldQty<=0||$already+(int)($item['qty']??0)>$soldQty){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Quantidade já devolvida ou superior à venda original.'],409);}
+  }
+  $rows[$idx]['status']='APROVADA';$rows[$idx]['approved_at']=date('c');
+  $rows[$idx]['approved_by']=(string)$actor['id'];
+  $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);$ok=fwrite($fp,$json)===strlen($json)&&ftruncate($fp,strlen($json))&&fflush($fp);
+  flock($fp,LOCK_UN);fclose($fp);
+  if(!$ok)outj(['ok'=>false,'erro'=>'Falha ao aprovar.'],503);
+  outj(['ok'=>true,'request'=>$rows[$idx],'spendable'=>false]);
+ }
+
  $body=file_get_contents('php://input');
  if(strlen($body)>8192){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Solicitação muito grande.'],413);}
  $v=json_decode($body,true);
