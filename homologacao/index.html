@@ -3225,8 +3225,25 @@ window.ugTrocaListar=async function(){
  if(!res.ok||!d.ok)throw Error(d.erro||'Falha na consulta');
  const rows=(d.returns||[]).filter(x=>[x.request_id,x.sale_id,x.client_name,x.type].some(v=>String(v||'').toLowerCase().includes(f))).reverse();
  if(!rows.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=7;cell.textContent='Nenhuma troca ou devolução registrada.';row.appendChild(cell);t.appendChild(row);return}
- rows.forEach(x=>{const tr=document.createElement('tr');[x.request_id,x.sale_id,x.client_name,x.created_at,money(x.total),x.status,'Aguardando aprovação'].forEach(v=>{const td=document.createElement('td');td.textContent=String(v||'');tr.appendChild(td)});t.appendChild(tr)});
+ rows.forEach(x=>{
+ const tr=document.createElement('tr');
+ [x.request_id,x.sale_id,x.client_name,x.created_at,money(x.total),x.status].forEach(v=>{const td=document.createElement('td');td.textContent=String(v??'');tr.appendChild(td)});
+ const td=document.createElement('td');
+ if(x.status==='PENDENTE'&&x.type==='CREDITO'){
+ const b=document.createElement('button');b.type='button';b.textContent='Aprovar crédito';b.onclick=()=>window.ugTrocaAprovar(x.request_id);td.appendChild(b)
+ }else td.textContent=x.status==='APROVADA'?'Crédito aprovado (uso no caixa em preparação)':'Aguardando aprovação';
+ tr.appendChild(td);t.appendChild(tr)
+ });
  }catch(e){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='Não foi possível consultar solicitações: '+e.message;tr.appendChild(td);t.appendChild(tr)}
+};
+window.ugTrocaAprovar=async function(id){
+ if(!confirm('Aprovar crédito de troca? O saldo será registrado, mas ainda NÃO poderá ser usado como pagamento no caixa.'))return;
+ try{
+ const res=await fetch('/licenca/api.php?action=returns_approve',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id})});
+ const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Aprovação não concluída');
+ alert('Crédito aprovado e registrado no servidor. Uso no caixa ainda não disponível.');
+ await window.ugTrocaListar()
+ }catch(e){alert('Não foi possível aprovar: '+e.message)}
 };
 window.ugTrocaAbrir=function(){window.ugTrocaListar();
  const form=document.getElementById('ugtForm');if(!form)return;form.classList.remove('hide');
