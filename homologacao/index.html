@@ -458,7 +458,7 @@ body.login-page,
 <p><button type="button" onclick="ugBuscarVendaOriginal()">🔎 Buscar venda original</button> <button type="button" onclick="document.getElementById('ugtForm').classList.add('hide')">Cancelar</button></p>
 <div id="ugTrocaResultado" aria-live="polite"></div>
 <div class="ugt-note"><strong>Modo de consulta:</strong> a busca da venda está disponível para teste. A confirmação da troca, crédito ou estorno depende de autorização e integração segura com estoque e financeiro.</div>
-<button type="button" disabled>Confirmar operação — aguardando integração</button>
+<button type="button" id="ugtSolicitar" onclick="ugTrocaSolicitar()">Registrar solicitação para aprovação</button>
 </div>
 </section>
 <section id="VENDA_EXTERNA" class="hide"><div class="ve-wrap"><h2>📱 Venda Externa</h2><p class="muted">Pedidos, consulta de estoque e clientes para atendimento pelo celular.</p><div class="ve-tabs"><button type="button" data-ve-tab="pedidos" class="ve-active">🧾 Pedidos</button><button type="button" data-ve-tab="estoque">🔎 Buscar Produtos</button><button type="button" data-ve-tab="clientes">👤 Clientes</button></div><div id="ve-pedidos" class="ve-panel"><div class="ve-card"><h3>Novo pedido externo</h3><label>Cliente cadastrado ou nome do cliente<input id="veCliente" list="veClientes" placeholder="Pesquise ou digite o cliente"></label><datalist id="veClientes"></datalist><label>Observações<input id="veObs" placeholder="Informações para entrega ou atendimento"></label><div class="ve-search"><input id="veBuscaPedido" placeholder="Buscar produto por nome, código ou barras"><button type="button" id="veBtnBuscaPedido">Buscar</button></div><div id="veResultadosPedido" class="ve-results"></div><div id="veCarrinho"></div><h3>Total: <span id="veTotal">R$ 0,00</span></h3><div class="ve-actions"><button type="button" id="veSalvar">Salvar pedido</button><button type="button" id="veFinalizar">Finalizar no PDV</button><button type="button" id="veLimpar" class="ve-secondary">Novo pedido</button></div><small>Pedidos externos são rascunhos locais até a finalização no PDV. Não lançam financeiro nem baixam estoque sozinhos.</small></div><div class="ve-card"><h3>Pedidos externos salvos</h3><div id="veListaPedidos"></div></div></div><div id="ve-estoque" class="ve-panel" hidden><div class="ve-card"><h3>Consulta de produtos e estoque</h3><input id="veBuscaEstoque" placeholder="Nome, código ou código de barras"><div id="veListaEstoque" class="ve-results"></div></div></div><div id="ve-clientes" class="ve-panel" hidden><div class="ve-card"><h3>Consultar clientes</h3><input id="veBuscaCliente" placeholder="Buscar cliente por nome, telefone ou documento"><div id="veListaClientes" class="ve-results"></div><div class="ve-actions"><button type="button" id="veAbrirCadastro">Abrir cadastro completo de clientes</button></div><small>O cadastro completo já existente será aberto sem criar um segundo banco de clientes.</small></div></div></div></section><section id="VENDA_DAF" class="hide"><div class="ug-daf-caixa"><div class="ug-daf-top"><strong>UniGestor</strong><span>DAF — PRÉ-VENDA</span><small>SEM PAGAMENTO</small></div><div class="ug-daf-corpo"><aside class="ug-daf-lateral"><img src="./logo-unigestor.png" alt="UniGestor" style="max-width:100%;max-height:180px;object-fit:contain"><h2>DAF</h2><p>Documento auxiliar interno</p><p>Não movimenta caixa nem estoque</p></aside><div class="ug-daf-principal"><div class="ug-daf-destaque"><input id="dafCodigoBusca" placeholder="DIGITE OU LEIA O CÓDIGO DE BARRAS" aria-label="Código de barras ou quantidade asterisco código"><div class="ug-daf-metricas"><div><small>QUANTIDADE</small><b id="dafDestaqueQtd">—</b></div><div><small>PREÇO UNITÁRIO</small><b id="dafDestaqueUnit">—</b></div><div><small>PREÇO TOTAL</small><b id="dafDestaqueValor">—</b></div></div></div><div class="ug-daf-lista"><div id="dafItens"></div></div><div class="ug-daf-cliente"><label>CLIENTE <input id="dafCliente" class="inp" maxlength="120" placeholder="Nome do cliente" autocomplete="off"></label></div><div class="ug-daf-rodape"><button type="button" class="btn" onclick="ugDAFAdicionar()">F2 — Buscar produto</button><button type="button" class="btn green" onclick="ugDAFSalvar()">F9 — SALVAR DAF</button><b id="dafTotal">Total: R$ 0,00</b></div><p id="dafAviso" class="muted"></p></div></div></div><div class="panel"><h3>DAFs aguardando caixa</h3><button type="button" class="btn" onclick="ugDAFListar()">Atualizar lista</button><div id="dafLista"></div></div></section><section id="VENDA_ORCAMENTOS" class="hide"><div class="uvdoc"><h2>Orçamentos</h2><p>Cadastre, consulte, imprima e acompanhe orçamentos.</p><div class="uv-card"><div class="uv-grid">
@@ -3215,19 +3215,41 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
 </script><script>
 (function(){
 const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-window.ugTrocaListar=function(){
+window.ugTrocaListar=async function(){
  const t=document.getElementById('ugtLista');if(!t)return;
  const f=(document.getElementById('ugtFiltro')?.value||'').toLowerCase();
  // No fake records: only confirmed server transactions will be listed.
- t.replaceChildren();const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=7;cell.textContent=f?'Nenhuma troca ou devolução encontrada.':'Nenhuma troca ou devolução registrada.';row.appendChild(cell);t.appendChild(row);
+ t.replaceChildren();
+ try{
+ const res=await fetch('/licenca/api.php?action=returns_list',{credentials:'include',cache:'no-store'}),d=await res.json();
+ if(!res.ok||!d.ok)throw Error(d.erro||'Falha na consulta');
+ const rows=(d.returns||[]).filter(x=>[x.request_id,x.sale_id,x.client_name,x.type].some(v=>String(v||'').toLowerCase().includes(f))).reverse();
+ if(!rows.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=7;cell.textContent='Nenhuma troca ou devolução registrada.';row.appendChild(cell);t.appendChild(row);return}
+ rows.forEach(x=>{const tr=document.createElement('tr');[x.request_id,x.sale_id,x.client_name,x.created_at,money(x.total),x.status,'Aguardando aprovação'].forEach(v=>{const td=document.createElement('td');td.textContent=String(v||'');tr.appendChild(td)});t.appendChild(tr)});
+ }catch(e){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='Não foi possível consultar solicitações: '+e.message;tr.appendChild(td);t.appendChild(tr)}
 };
-window.ugTrocaAbrir=function(){
+window.ugTrocaAbrir=function(){window.ugTrocaListar();
  const form=document.getElementById('ugtForm');if(!form)return;form.classList.remove('hide');
  const sel=document.getElementById('ugTrocaCliente');sel.replaceChildren();
  const empty=document.createElement('option');empty.value='';empty.textContent='Selecione um cliente';sel.appendChild(empty);
  const data=typeof clientes!=='undefined'&&Array.isArray(clientes)?clientes:[];
  data.forEach((c,i)=>{const opt=document.createElement('option');opt.value=String(c.id||c.uid||i);opt.textContent=String(c.nome||c.razaoSocial||c.name||'Cliente '+(i+1));sel.appendChild(opt)});
  document.getElementById('ugTrocaVenda').focus();
+};
+window.ugTrocaSolicitar=async function(){
+ const button=document.getElementById('ugtSolicitar'),sale=document.getElementById('ugTrocaVenda').value.trim(),reason=document.getElementById('ugTrocaMotivo').value.trim(),type=document.getElementById('ugTrocaTipo').value;
+ const items=[...document.querySelectorAll('#ugTrocaResultado .ugt-item')].filter(c=>c.checked).map(c=>({index:Number(c.dataset.index),qty:Number(c.closest('tr').querySelector('.ugt-qty').value)}));
+ if(!sale||!reason||!items.length||items.some(i=>!Number.isInteger(i.qty)||i.qty<1)){alert('Informe a venda, o motivo e selecione produtos com quantidade válida.');return}
+ if(!window.ugTrocaVendaId||window.ugTrocaVendaId!==sale){alert('Busque novamente a venda original antes de registrar.');return}
+ if(!confirm('Registrar solicitação PENDENTE? Nenhum crédito, estorno ou estoque será movimentado nesta etapa.'))return;
+ button.disabled=true;
+ try{
+ const request_id='RT-'+Date.now()+'-'+Math.random().toString(36).slice(2,12);
+ const res=await fetch('/licenca/api.php?action=returns_request',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id,sale_id:sale,type,reason,client_id:document.getElementById('ugTrocaCliente').value,items})});
+ const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Falha ao salvar');
+ alert('Solicitação registrada como PENDENTE. Nenhum crédito ou estoque foi alterado.');
+ document.getElementById('ugtForm').classList.add('hide');await window.ugTrocaListar();
+ }catch(e){alert('Solicitação não concluída: '+e.message)}finally{button.disabled=false}
 };
 window.ugTrocaCalcular=function(){
  let total=0,selected=0,invalid=false;
@@ -3237,7 +3259,7 @@ window.ugTrocaCalcular=function(){
 window.ugBuscarVendaOriginal=async function(){
  const field=document.getElementById('ugTrocaVenda'),out=document.getElementById('ugTrocaResultado');
  if(!field||!out)return;out.replaceChildren();
- const term=String(field.value||'').trim().toLowerCase();
+ window.ugTrocaVendaId=null;const term=String(field.value||'').trim().toLowerCase();
  out.textContent='Buscando venda na empresa...';
  let rows=[];
  try{
@@ -3254,7 +3276,7 @@ window.ugBuscarVendaOriginal=async function(){
  const recent=rows.slice().sort((a,b)=>String(b.registrado_em||b.data||'').localeCompare(String(a.registrado_em||a.data||''))).slice(0,20);
  if(recent.length){const list=document.createElement('div');list.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:12px 0';
  recent.forEach(x=>{const id=x.cupom||x.codigoCupom||x.id;if(!id)return;const btn=document.createElement('button');btn.type='button';btn.textContent=String(id)+' — '+String(x.cliente||x.clienteNome||'Venda')+' — '+money(x.total);btn.onclick=()=>{field.value=String(id);window.ugBuscarVendaOriginal()};list.appendChild(btn)});out.appendChild(list)}return}
- out.replaceChildren();
+ out.replaceChildren();window.ugTrocaVendaId=String(v.id);field.value=String(v.id);
  const h=document.createElement('h4');h.textContent='Venda localizada: '+String(v.numero||v.id);out.appendChild(h);
  const p=document.createElement('p');p.textContent='Cliente: '+String(v.clienteNome||v.cliente||v.nomeCliente||'Não identificado')+' | Total: '+money(v.total);out.appendChild(p);
  const items=Array.isArray(v.itens)?v.itens:Array.isArray(v.items)?v.items:[];
