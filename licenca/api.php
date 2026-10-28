@@ -506,9 +506,17 @@ if(in_array($action,['returns_list','returns_request','returns_approve','returns
   if($client===''||strlen($client)>100){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Cliente obrigatório.'],400);}
   $balance=0;
   foreach($rows as $entry)if(($entry['status']??'')==='APROVADA'&&($entry['type']??'')==='CREDITO'&&(string)($entry['client_id']??'')===$client)
-   $balance+=round((float)($entry['total']??0),2);
-  // Until redemption is atomic with the sales ledger, this endpoint reports issued credit only.
-  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'issued_credit'=>round($balance,2),'spendable'=>false,'restaurant_id'=>$rid]);
+   $balance+=(int)round(100*(float)($entry['total']??0));
+  $salesFile=DATA_DIR.'/empresa-vendas/'.hash('sha256',$rid).'.json';
+  $salesFp=@fopen($salesFile,'c+');
+  if(!$salesFp||!flock($salesFp,LOCK_SH)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Não foi possível consultar as vendas.'],503);}
+  rewind($salesFp);$salesRaw=stream_get_contents($salesFp);$salesRows=$salesRaw?json_decode($salesRaw,true):[];
+  if(!is_array($salesRows)){flock($salesFp,LOCK_UN);fclose($salesFp);flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Vendas inválidas.'],503);}
+  foreach($salesRows as $sale)if((string)($sale['clienteUid']??'')===$client)
+   foreach(($sale['pagamentos']??[]) as $pay)if(($pay['forma']??'')==='CREDITO_TROCA')$balance-=(int)round(100*(float)($pay['valor']??0));
+  flock($salesFp,LOCK_UN);fclose($salesFp);
+  $balance=max(0,$balance);
+  flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>true,'balance'=>$balance/100,'spendable'=>true,'restaurant_id'=>$rid]);
  }
  if($action==='returns_approve'){
   if(!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true)){
@@ -621,6 +629,23 @@ if(in_array($action,['sales_list','sales_create'],true)){
     $v['registrado_em']=date('c');
     $v['total']=round((float)($v['total']??0),2);
     if($v['total']<0||$v['total']>100000000)outj(['ok'=>false,'erro'=>'Valor inválido.'],400);
+    // Atomic redemption: both the available balance and the new sale are
+    // checked under the same per-company sales lock.
+    $redeem=0;
+    foreach($v['pagamentos'] as $pay)if(($pay['forma']??'')==='CREDITO_TROCA')$redeem+=(int)round(100*(float)($pay['valor']??0));
+    if($redeem>0){
+      $client=trim((string)($v['clienteUid']??''));
+      if($client===''||strlen($client)>100)outj(['ok'=>false,'erro'=>'Selecione o cliente do crédito de troca.'],400);
+      $returnsFile=DATA_DIR.'/empresa-trocas/'.hash('sha256',$rid).'.json';
+      $returnRows=json_decode(@file_get_contents($returnsFile)?:'[]',true);
+      if(!is_array($returnRows))outj(['ok'=>false,'erro'=>'Créditos indisponíveis.'],503);
+      $available=0;
+      foreach($returnRows as $ret)if(($ret['status']??'')==='APROVADA'&&($ret['type']??'')==='CREDITO'&&(string)($ret['client_id']??'')===$client)
+        $available+=(int)round(100*(float)($ret['total']??0));
+      foreach($rows as $previous)if((string)($previous['clienteUid']??'')===$client)
+        foreach(($previous['pagamentos']??[]) as $pay)if(($pay['forma']??'')==='CREDITO_TROCA')$available-=(int)round(100*(float)($pay['valor']??0));
+      if($redeem>$available)outj(['ok'=>false,'erro'=>'Saldo de crédito de troca insuficiente.'],409);
+    }
     $rows[]=$v;
     $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
     rewind($fp);
