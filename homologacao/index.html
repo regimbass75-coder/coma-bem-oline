@@ -3053,11 +3053,22 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return reply(false,'Itens inválidos.');
   const produtos=Array.isArray(estoque)?estoque:[];
   for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!ugPoliticaEstoque()&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
-  const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA'};
+  const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA',CREDITO_TROCA:'CREDITO_TROCA'};
   const totalTransferido=itens.reduce((sum,x)=>sum+x.qtd*x.preco,0);
   if(!Array.isArray(payments)||!payments.length||payments.length>12||!payments.every(p=>map[p.forma]&&Number.isFinite(p.valor)&&p.valor>0)||Math.abs(totalTransferido-payments.reduce((sum,p)=>sum+p.valor,0))>0.01)return reply(false,'Confira os valores e as formas de pagamento.');
   const clienteIdx=event.data.clienteIndex;
   const creditoTransferido=payments.filter(p=>p.forma==='CREDIARIO').reduce((a,p)=>a+p.valor,0);
+  const trocaTransferida=payments.filter(p=>p.forma==='CREDITO_TROCA').reduce((a,p)=>a+p.valor,0);
+  if(trocaTransferida>0){
+   if(clienteIdx===''||clienteIdx==null||!clientes[Number(clienteIdx)])return reply(false,'Selecione o cliente do crédito de troca pelo F10.');
+   try{
+    const cid=ugClienteId(clientes[Number(clienteIdx)]);
+    const res=await fetch('/licenca/api.php?action=returns_balance&client_id='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'});
+    const d=await res.json();
+    if(!res.ok||!d.ok||Number(d.balance||0)+0.001<trocaTransferida)return reply(false,'Crédito de troca indisponível ou insuficiente. Verifique a aprovação e o cliente.');
+   }catch(e){return reply(false,'Não foi possível validar o crédito de troca: '+e.message)}
+  }
+
   if(creditoTransferido>0){
    if(clienteIdx===''||clienteIdx==null||!Number.isInteger(Number(clienteIdx))||!clientes[Number(clienteIdx)])return reply(false,'Selecione um cliente válido para o crédito da loja.');
    const c=clientes[Number(clienteIdx)];
@@ -3075,6 +3086,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    const form=document.getElementById('pagForma'),value=document.getElementById('pagRecebido');
    if(!form||!value||typeof adicionarPagamento!=='function')throw Error('Tela de pagamento indisponível.');
    for(const p of payments){
+    if(p.forma==='CREDITO_TROCA'){pagamentosPdv.push({forma:'CREDITO_TROCA',valor:p.valor});renderPagamentos();continue;}
     if(![...form.options].some(o=>o.value===map[p.forma]))throw Error('Forma de pagamento indisponível: '+p.forma);
     form.value=map[p.forma];if(p.forma==='CREDIARIO')atualizarCreditoPagamento();value.value=String(p.valor);adicionarPagamento();
    }
