@@ -291,6 +291,15 @@ def homolog_master_bridge():
     if action in ('', 'me', 'users_list', 'sales_list', 'orders_list', 'company_backup', 'customers_list', 'credit_receipts_list', 'daf_list') and request.method != 'GET':
         return jsonify({'ok': False, 'erro': 'Use GET.'}), 405
     params = {'action': action} if action else {'key': (request.args.get('key') or '').strip().upper()}
+    # Forward only the documented return-credit lookup parameter.
+    # Previously the bridge discarded client_id, causing "Cliente obrigatório"
+    # even when the customer was correctly selected in Frente de Caixa.
+    if action == 'returns_balance':
+        client_id = (request.args.get('client_id') or '').strip()
+        if not client_id or len(client_id) > 100:
+            return jsonify({'ok': False, 'erro': 'Cliente obrigatório.'}), 400
+        params['client_id'] = client_id
+
     if not action and (not params['key'] or len(params['key']) > 128):
         return jsonify({'ok': False, 'status': 'SEM_CHAVE'}), 400
     body = request.get_data(cache=False) if request.method == 'POST' else None
