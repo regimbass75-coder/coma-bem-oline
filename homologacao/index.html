@@ -1047,7 +1047,29 @@ async function enviarPedido(){
  }catch(e){alert("Pedido enviado, mas a impressão falhou: "+e.message);}
  auditar("PEDIDO ENVIADO","PDV / "+origemPedido);
 }function renderKds(){let e=document.getElementById("kdsLista");if(!e)return;let todos=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),f=document.getElementById("kdsFiltro")?.value||"",q=(document.getElementById("kdsBusca")?.value||"").toLowerCase(),ps=todos.filter(p=>p.status!=="ENTREGUE"&&(!f||p.status===f)&&(!q||(p.id+" "+(p.origem||"BALCÃO")+" "+p.itens.map(i=>i.nome).join(" ")).toLowerCase().includes(q))),r=document.getElementById("kdsResumo");if(r)r.textContent=todos.filter(p=>p.status==="ENVIADO").length+" aguardando • "+todos.filter(p=>p.status==="EM PREPARO").length+" em preparo • "+todos.filter(p=>p.status==="PRONTO").length+" prontos";e.innerHTML=ps.length?ps.map(p=>'<div class="card"><b>Pedido '+p.id.replace("PED-","").replace("GAR-","")+'</b><p class="muted">'+p.hora+(p.origem?" • "+p.origem:"")+' • '+p.status+'</p><p>'+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+'</p>'+(p.status==="ENVIADO"?'<button class="btn gold" onclick="avKdsId(\''+p.id+'\')">INICIAR PREPARO</button>':p.status==="EM PREPARO"?'<button class="btn green" onclick="avKdsId(\''+p.id+'\')">MARCAR PRONTO</button>':'<span class="badge entregue">PRONTO</span>')+'</div>').join(""):'<div class="card">Nenhum pedido na cozinha.</div>'}function avKds(){ return avKdsId.apply(this,arguments); }
-function avKdsId(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;if(p.status==="ENVIADO")p.status="EM PREPARO";else if(p.status==="EM PREPARO")p.status="PRONTO";else return;localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderKds();renderRetirada();renderPedidos();renderDashboard()}function retirarPedido(i){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]");if(!ps[i]||ps[i].status!=="PRONTO")return;ps[i].status="RETIRADO";ps[i].retirado_em=new Date().toISOString();localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));auditar("PEDIDO RETIRADO",(ps[i].origem||"BALCÃO")+" • "+ps[i].id);renderKds();renderProducao();renderPedidos();renderRetirada();renderDashboard()}function renderRetirada(){let e=document.getElementById("retLista");if(!e)return;let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]").filter(p=>p.status==="PRONTO"||p.status==="ENTREGUE");e.innerHTML=ps.length?ps.map(p=>"<div class=\"card\"><b>"+(p.origem||"BALCÃO")+"</b><p class=\"muted\">"+p.hora+" • "+p.status+"</p><p>"+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+"</p>"+(p.status==="PRONTO"?"<button class=\"btn green\" onclick=\"entregarPedido(\'"+p.id+"\')\">MARCAR ENTREGUE</button>":"<span class=\"badge entregue\">ENTREGUE</span>")+"</div>").join(""):"<div class=\"card\">Nenhum pedido pronto.</div>"}function entregarPedido(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;p.status="ENTREGUE";localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderRetirada();renderKds();renderDashboard()}function sairMesaPdv(){localStorage.removeItem("cb_hom_mesa_pdv");renderPdv()}function cancelarPdv(){if(!pdv.length)return;let login=prompt("Autorização para cancelar a venda.\nLogin do ADMINISTRADOR ou GERENTE:");if(login===null)return;let u=usuarios.find(a=>a.ativo&&a.login.toLowerCase()===String(login).trim().toLowerCase()&&(a.perfil==="ADMINISTRADOR"||a.perfil==="GERENTE"));if(!u)return alert("Usuário sem autorização para cancelar venda.");let senha=prompt("Senha/autorização de "+u.nome+":");if(senha===null)return;if(String(u.senha||"")!==String(senha))return alert("Senha/autorização inválida.");if(!confirm("Cancelar a venda atual?"))return;let itens=pdv.reduce((s,x)=>s+Number(x.qtd||0),0),valor=totalPdv();auditar("VENDA CANCELADA",itens+" item(ns) • "+moeda(valor)+" • autorizado por "+u.nome);pdv=[];pagamentosPdv=[];fecharPagamento();salvar();alert("Venda cancelada com autorização.")}function preencherRestantePagamento(){let e=document.getElementById("pagRecebido"),forma=document.getElementById("pagForma")?.value||"DINHEIRO",rest=Math.max(0,totalPdv()-totalPagamentos());if(!e)return;e.value=rest>0?rest.toFixed(2):"";e.select();if(forma==="DINHEIRO")e.focus()}function abrirPagamento(modoFrenteCaixa=false){
+function avKdsId(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;if(p.status==="ENVIADO")p.status="EM PREPARO";else if(p.status==="EM PREPARO")p.status="PRONTO";else return;localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderKds();renderRetirada();renderPedidos();renderDashboard()}function retirarPedido(i){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]");if(!ps[i]||ps[i].status!=="PRONTO")return;ps[i].status="RETIRADO";ps[i].retirado_em=new Date().toISOString();localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));auditar("PEDIDO RETIRADO",(ps[i].origem||"BALCÃO")+" • "+ps[i].id);renderKds();renderProducao();renderPedidos();renderRetirada();renderDashboard()}function renderRetirada(){let e=document.getElementById("retLista");if(!e)return;let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]").filter(p=>p.status==="PRONTO"||p.status==="ENTREGUE");e.innerHTML=ps.length?ps.map(p=>"<div class=\"card\"><b>"+(p.origem||"BALCÃO")+"</b><p class=\"muted\">"+p.hora+" • "+p.status+"</p><p>"+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+"</p>"+(p.status==="PRONTO"?"<button class=\"btn green\" onclick=\"entregarPedido(\'"+p.id+"\')\">MARCAR ENTREGUE</button>":"<span class=\"badge entregue\">ENTREGUE</span>")+"</div>").join(""):"<div class=\"card\">Nenhum pedido pronto.</div>"}function entregarPedido(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;p.status="ENTREGUE";localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderRetirada();renderKds();renderDashboard()}function sairMesaPdv(){localStorage.removeItem("cb_hom_mesa_pdv");renderPdv()}function cancelarPdv(){if(!pdv.length)return;let login=prompt("Autorização para cancelar a venda.\nLogin do ADMINISTRADOR ou GERENTE:");if(login===null)return;let u=usuarios.find(a=>a.ativo&&a.login.toLowerCase()===String(login).trim().toLowerCase()&&(a.perfil==="ADMINISTRADOR"||a.perfil==="GERENTE"));if(!u)return alert("Usuário sem autorização para cancelar venda.");let senha=prompt("Senha/autorização de "+u.nome+":");if(senha===null)return;if(String(u.senha||"")!==String(senha))return alert("Senha/autorização inválida.");if(!confirm("Cancelar a venda atual?"))return;let itens=pdv.reduce((s,x)=>s+Number(x.qtd||0),0),valor=totalPdv();auditar("VENDA CANCELADA",itens+" item(ns) • "+moeda(valor)+" • autorizado por "+u.nome);pdv=[];pagamentosPdv=[];fecharPagamento();salvar();alert("Venda cancelada com autorização.")}function preencherRestantePagamento(){let e=document.getElementById("pagRecebido"),forma=document.getElementById("pagForma")?.value||"DINHEIRO",rest=Math.max(0,totalPdv()-totalPagamentos());if(!e)return;e.value=rest>0?rest.toFixed(2):"";e.select();if(forma==="DINHEIRO")e.focus()}
+// Crédito de troca: independente do crediário e confirmado no servidor.
+async function ugConsultarCreditoTroca(){
+ const sel=document.getElementById('pagClienteNormal'),info=document.getElementById('ugTrocaSaldoPagamento');
+ if(!sel||sel.value===''){if(info)info.textContent='Selecione o cliente para consultar o crédito de troca.';return 0}
+ const c=clientes[Number(sel.value)];if(!c)return 0;
+ const id=ugClienteId(c);
+ const res=await fetch('/licenca/api.php?action=returns_balance&client_id='+encodeURIComponent(id),{credentials:'include',cache:'no-store'});
+ const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Consulta de crédito indisponível');
+ if(info)info.textContent='Crédito de troca disponível: '+moeda(d.balance||0);
+ return Number(d.balance||0);
+}
+async function ugAplicarCreditoTroca(){
+ try{
+ const balance=await ugConsultarCreditoTroca();
+ const rest=Math.max(0,totalPdv()-totalPagamentos());
+ const amount=Math.min(balance,rest);
+ if(amount<=0)return alert('Este cliente não possui crédito de troca aprovado disponível.');
+ pagamentosPdv.push({forma:'CREDITO_TROCA',valor:Math.round(amount*100)/100});
+ renderPagamentos();preencherRestantePagamento();
+ }catch(e){alert('Crédito de troca: '+e.message)}
+}
+function abrirPagamento(modoFrenteCaixa=false){
  if(!pdv.length){alert("Adicione produtos.");return;}
  if(!caixa.aberto){alert("Abra o caixa antes de finalizar.");return;}
  pagamentosPdv=[];
@@ -1063,6 +1085,13 @@ function avKdsId(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"
  atualizarCreditoPagamento();
  let pcn=document.getElementById("pagClienteNormal");if(pcn){pcn.innerHTML='<option value="">Consumidor não identificado</option>'+clientes.map((c,i)=>'<option value="'+i+'">'+c.nome+'</option>').join("");}
  preencherRestantePagamento();
+ let area=document.getElementById('ugTrocaPagamentoArea');
+ if(!area){
+ area=document.createElement('div');area.id='ugTrocaPagamentoArea';
+ area.innerHTML='<p id="ugTrocaSaldoPagamento" class="muted">Selecione o cliente para consultar o crédito de troca.</p><button type="button" class="btn gold" onclick="ugAplicarCreditoTroca()">USAR CRÉDITO DE TROCA</button>';
+ document.getElementById('pagClienteNormalBox')?.appendChild(area);
+ }
+ document.getElementById('pagClienteNormal')?.addEventListener('change',()=>ugConsultarCreditoTroca().catch(e=>{document.getElementById('ugTrocaSaldoPagamento').textContent=e.message}),{once:false});
  if(!modoFrenteCaixa)setTimeout(()=>document.getElementById("pagRecebido")?.focus(),80);
 }
 function fecharPagamento(){
@@ -1115,6 +1144,15 @@ async function confirmarPagamento(){
  if(!caixa.aberto)return alert("Abra o caixa antes de finalizar a venda.");
  let total=totalPdv(),pago=totalPagamentos();
  if(pago+0.001<total)return alert("Ainda falta "+moeda(total-pago)+".");
+ let trocaPag=pagamentosPdv.filter(p=>p.forma==='CREDITO_TROCA').reduce((sum,p)=>sum+Number(p.valor||0),0);
+ let trocaCliente=null;
+ if(trocaPag>0){
+  const sel=document.getElementById('pagClienteNormal');
+  trocaCliente=sel?.value!==''?clientes[Number(sel.value)]:null;
+  if(!trocaCliente)return alert('Selecione o cliente que possui o crédito de troca.');
+  try{const available=await ugConsultarCreditoTroca();if(trocaPag>available+0.001)return alert('Crédito de troca insuficiente. Disponível: '+moeda(available))}
+  catch(e){return alert('Não foi possível validar o crédito: '+e.message)}
+ }
  let creditoPag=pagamentosPdv.filter(p=>p.forma==="CREDITO_LOJA").reduce((s,p)=>s+Number(p.valor||0),0),clienteCreditoIdx=document.getElementById("pagClienteCredito")?.value||"";
  if(creditoPag>0){if(clienteCreditoIdx==="")return alert("Selecione o cliente para o crédito da loja.");let cc=clientes[Number(clienteCreditoIdx)];if(!cc)return alert("Cliente do crédito não encontrado.");if(saldoCreditoCliente(cc)+0.001<creditoPag)return alert("Limite de crédito insuficiente. Disponível: "+moeda(saldoCreditoCliente(cc)));}
 for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()&&e&&e.qtd<i.qtd)return alert("Estoque insuficiente para "+i.nome+".")}
@@ -1127,6 +1165,14 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  venda.cliente=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?clientes[Number(clienteVendaIdx)].nome:"";
  venda.clienteId=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?Number(clienteVendaIdx):null;
  if(creditoPag>0&&clienteCreditoIdx!==""){venda.cliente=clientes[Number(clienteCreditoIdx)].nome;venda.clienteId=Number(clienteCreditoIdx);venda.clienteUid=ugClienteId(clientes[Number(clienteCreditoIdx)]);}
+ if(trocaCliente){
+  venda.cliente=trocaCliente.nome;venda.clienteUid=ugClienteId(trocaCliente);
+  venda.clienteId=clientes.indexOf(trocaCliente);
+  try{
+   const res=await fetch('/licenca/api.php?action=sales_create',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(venda)});
+   const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Venda não confirmada');
+  }catch(e){return alert('Venda não finalizada: '+e.message)}
+ }
  if(creditoPag>0){let cc=clientes[Number(clienteCreditoIdx)];cc.creditoUsado=creditoCliente(cc)+creditoPag;contas.unshift({tipo:"RECEBER",descricao:"Crédito da loja - "+cc.nome+" - "+vendaId,desc:"Crédito da loja - "+cc.nome+" - "+vendaId,cliente:cc.nome,clienteId:Number(clienteCreditoIdx),clienteUid:venda.clienteUid,valor:creditoPag,vencimento:new Date().toISOString().slice(0,10),venc:new Date().toISOString().slice(0,10),status:"ABERTA",vendaId:vendaId,criado_em:new Date().toISOString()});}
  Object.assign(venda,usuarioAtualCaixa());
  vendas.unshift(venda);
@@ -3231,17 +3277,17 @@ window.ugTrocaListar=async function(){
  const td=document.createElement('td');
  if(x.status==='PENDENTE'&&x.type==='CREDITO'){
  const b=document.createElement('button');b.type='button';b.textContent='Aprovar crédito';b.onclick=()=>window.ugTrocaAprovar(x.request_id);td.appendChild(b)
- }else td.textContent=x.status==='APROVADA'?'Crédito aprovado (uso no caixa em preparação)':'Aguardando aprovação';
+ }else td.textContent=x.status==='APROVADA'?'Crédito disponível no F9':'Aguardando aprovação';
  tr.appendChild(td);t.appendChild(tr)
  });
  }catch(e){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.textContent='Não foi possível consultar solicitações: '+e.message;tr.appendChild(td);t.appendChild(tr)}
 };
 window.ugTrocaAprovar=async function(id){
- if(!confirm('Aprovar crédito de troca? O saldo será registrado, mas ainda NÃO poderá ser usado como pagamento no caixa.'))return;
+ if(!confirm('Aprovar crédito de troca? O crédito ficará disponível para pagamento no F9.'))return;
  try{
  const res=await fetch('/licenca/api.php?action=returns_approve',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_id:id})});
  const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Aprovação não concluída');
- alert('Crédito aprovado e registrado no servidor. Uso no caixa ainda não disponível.');
+ alert('Crédito aprovado. Selecione o cliente no pagamento F9 para utilizá-lo.');
  await window.ugTrocaListar()
  }catch(e){alert('Não foi possível aprovar: '+e.message)}
 };
