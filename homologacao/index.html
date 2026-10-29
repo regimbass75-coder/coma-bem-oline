@@ -1156,7 +1156,7 @@ async function confirmarPagamento(){
  let creditoPag=pagamentosPdv.filter(p=>p.forma==="CREDITO_LOJA").reduce((s,p)=>s+Number(p.valor||0),0),clienteCreditoIdx=document.getElementById("pagClienteCredito")?.value||"";
  if(creditoPag>0){if(clienteCreditoIdx==="")return alert("Selecione o cliente para o crédito da loja.");let cc=clientes[Number(clienteCreditoIdx)];if(!cc)return alert("Cliente do crédito não encontrado.");if(saldoCreditoCliente(cc)+0.001<creditoPag)return alert("Limite de crédito insuficiente. Disponível: "+moeda(saldoCreditoCliente(cc)));}
 for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()&&e&&e.qtd<i.qtd)return alert("Estoque insuficiente para "+i.nome+".")}
- for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(e)e.qtd-=i.qtd;}
+ 
  let pags=JSON.parse(JSON.stringify(pagamentosPdv)),forma=pags.length===1?pags[0].forma:"MISTO",
  vendaId="V-"+Date.now()+"-"+Math.random().toString(36).slice(2,10), tipoVenda=localStorage.getItem("cb_hom_tipo_venda")||"BALCÃO", mesaVenda=localStorage.getItem("cb_hom_mesa_pdv")||"", comandaVenda=localStorage.getItem("cb_hom_comanda_pdv")||"", ev={id:"VENDA-"+Date.now()+"-"+Math.random().toString(16).slice(2),tipo:"VENDA_PDV",tipoVenda:tipoVenda,mesa:mesaVenda,comanda:comandaVenda,criado_em:new Date().toISOString(),total:total,forma:forma,pagamentos:pags,itens:JSON.parse(JSON.stringify(pdv))};
  fila.push(ev);
@@ -1168,11 +1168,14 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  if(trocaCliente){
   venda.cliente=trocaCliente.nome;venda.clienteUid=ugClienteId(trocaCliente);
   venda.clienteId=clientes.indexOf(trocaCliente);
+ }
+ if(trocaCliente||Number(venda.desconto)>0){
   try{
    const res=await fetch('/licenca/api.php?action=sales_create',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(venda)});
    const d=await res.json();if(!res.ok||!d.ok)throw Error(d.erro||'Venda não confirmada');
   }catch(e){return alert('Venda não finalizada: '+e.message)}
  }
+ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(e)e.qtd-=i.qtd;}
  if(creditoPag>0){let cc=clientes[Number(clienteCreditoIdx)];cc.creditoUsado=creditoCliente(cc)+creditoPag;contas.unshift({tipo:"RECEBER",descricao:"Crédito da loja - "+cc.nome+" - "+vendaId,desc:"Crédito da loja - "+cc.nome+" - "+vendaId,cliente:cc.nome,clienteId:Number(clienteCreditoIdx),clienteUid:venda.clienteUid,valor:creditoPag,vencimento:new Date().toISOString().slice(0,10),venc:new Date().toISOString().slice(0,10),status:"ABERTA",vendaId:vendaId,criado_em:new Date().toISOString()});}
  Object.assign(venda,usuarioAtualCaixa());
  vendas.unshift(venda);
@@ -1198,7 +1201,7 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  }
  pdv=[];pagamentosPdv=[];fecharPagamento();salvar();renderClientes();renderFinanceiro();auditar("VENDA FINALIZADA",forma+" • "+moeda(total));
  if(window.__ugFrenteCaixaReply){const fn=window.__ugFrenteCaixaReply;window.__ugFrenteCaixaReply=null;fn(true,{mensagem:'Venda registrada; impressão na Frente de Caixa.',recibo:htmlReciboFrenteCaixa(venda)});}
- if(window.ugEnviarVendaCentral) {try{await window.ugEnviarVendaCentral(venda)}catch(e){console.error('Sincronização da venda:',e)}}
+ if(window.ugEnviarVendaCentral && !venda.desconto && !trocaCliente) {try{await window.ugEnviarVendaCentral(venda)}catch(e){console.error('Sincronização da venda:',e)}}
  if(!window.__ugFrenteCaixaSilent)alert("Venda finalizada.");
  try{
    const r=window.__ugFrenteCaixaSilent?{ok:true,modo:'IMPRESSAO_NA_FRENTE_CAIXA'}:await imprimirVendaDireta(venda);
