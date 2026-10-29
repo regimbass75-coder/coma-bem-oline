@@ -644,7 +644,7 @@ if(in_array($action,['sales_list','sales_create'],true)){
     $discount=round((float)($v['desconto']??0),2);
     if($discount<0||$discount>=$gross&&$discount>0||abs($v['total']-round($gross-$discount,2))>0.01)outj(['ok'=>false,'erro'=>'Total ou desconto divergente.'],400);
     $paid=0;foreach($v['pagamentos'] as $pay){if(!is_array($pay)||!is_numeric($pay['valor']??null)||($pay['valor']??0)<=0)outj(['ok'=>false,'erro'=>'Pagamento inválido.'],400);$paid+=(float)$pay['valor'];}
-    if(abs(round($paid,2)-$v['total'])>0.01)outj(['ok'=>false,'erro'=>'Pagamentos não conferem com total líquido.'],400);
+    if($discount>0&&abs(round($paid,2)-$v['total'])>0.01)outj(['ok'=>false,'erro'=>'Pagamentos não conferem com total líquido.'],400);
     if($discount>0){
       $token=(string)($v['discount_token']??'');
       if($token===''||time()>(int)($_SESSION['ug_discount_token_expires']??0)||!hash_equals((string)($_SESSION['ug_discount_token_hash']??''),hash('sha256',$token)))outj(['ok'=>false,'erro'=>'Desconto sem autorização fiscal válida.'],403);
