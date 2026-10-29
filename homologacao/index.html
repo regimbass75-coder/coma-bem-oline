@@ -925,7 +925,7 @@ async function delPdv(i){
  auditar('ITEM CANCELADO',x.qtd+'x '+x.nome+' • autorizado por '+(u.name||u.login||'Fiscal'));
  pdv.splice(i,1);salvar();renderCancelamentos();renderPdv();
 }
-function totalPdv(){return pdv.reduce((s,i)=>s+i.preco*i.qtd,0)}function definirTipoVenda(tipo,abrir){
+let ugDescontoVendaFrente=null;function ugBrutoPdv(){return Math.round(pdv.reduce((s,i)=>s+i.preco*i.qtd,0)*100)/100}function totalPdv(){return Math.round(Math.max(0,ugBrutoPdv()-(ugDescontoVendaFrente?.valor||0))*100)/100}function definirTipoVenda(tipo,abrir){
  const t=String(tipo||"BALCÃO").toUpperCase();
  localStorage.setItem("cb_hom_tipo_venda",t);
  if(t!=="MESA") localStorage.removeItem("cb_hom_mesa_pdv");
@@ -1047,7 +1047,7 @@ async function enviarPedido(){
  }catch(e){alert("Pedido enviado, mas a impressão falhou: "+e.message);}
  auditar("PEDIDO ENVIADO","PDV / "+origemPedido);
 }function renderKds(){let e=document.getElementById("kdsLista");if(!e)return;let todos=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),f=document.getElementById("kdsFiltro")?.value||"",q=(document.getElementById("kdsBusca")?.value||"").toLowerCase(),ps=todos.filter(p=>p.status!=="ENTREGUE"&&(!f||p.status===f)&&(!q||(p.id+" "+(p.origem||"BALCÃO")+" "+p.itens.map(i=>i.nome).join(" ")).toLowerCase().includes(q))),r=document.getElementById("kdsResumo");if(r)r.textContent=todos.filter(p=>p.status==="ENVIADO").length+" aguardando • "+todos.filter(p=>p.status==="EM PREPARO").length+" em preparo • "+todos.filter(p=>p.status==="PRONTO").length+" prontos";e.innerHTML=ps.length?ps.map(p=>'<div class="card"><b>Pedido '+p.id.replace("PED-","").replace("GAR-","")+'</b><p class="muted">'+p.hora+(p.origem?" • "+p.origem:"")+' • '+p.status+'</p><p>'+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+'</p>'+(p.status==="ENVIADO"?'<button class="btn gold" onclick="avKdsId(\''+p.id+'\')">INICIAR PREPARO</button>':p.status==="EM PREPARO"?'<button class="btn green" onclick="avKdsId(\''+p.id+'\')">MARCAR PRONTO</button>':'<span class="badge entregue">PRONTO</span>')+'</div>').join(""):'<div class="card">Nenhum pedido na cozinha.</div>'}function avKds(){ return avKdsId.apply(this,arguments); }
-function avKdsId(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;if(p.status==="ENVIADO")p.status="EM PREPARO";else if(p.status==="EM PREPARO")p.status="PRONTO";else return;localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderKds();renderRetirada();renderPedidos();renderDashboard()}function retirarPedido(i){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]");if(!ps[i]||ps[i].status!=="PRONTO")return;ps[i].status="RETIRADO";ps[i].retirado_em=new Date().toISOString();localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));auditar("PEDIDO RETIRADO",(ps[i].origem||"BALCÃO")+" • "+ps[i].id);renderKds();renderProducao();renderPedidos();renderRetirada();renderDashboard()}function renderRetirada(){let e=document.getElementById("retLista");if(!e)return;let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]").filter(p=>p.status==="PRONTO"||p.status==="ENTREGUE");e.innerHTML=ps.length?ps.map(p=>"<div class=\"card\"><b>"+(p.origem||"BALCÃO")+"</b><p class=\"muted\">"+p.hora+" • "+p.status+"</p><p>"+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+"</p>"+(p.status==="PRONTO"?"<button class=\"btn green\" onclick=\"entregarPedido(\'"+p.id+"\')\">MARCAR ENTREGUE</button>":"<span class=\"badge entregue\">ENTREGUE</span>")+"</div>").join(""):"<div class=\"card\">Nenhum pedido pronto.</div>"}function entregarPedido(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;p.status="ENTREGUE";localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderRetirada();renderKds();renderDashboard()}function sairMesaPdv(){localStorage.removeItem("cb_hom_mesa_pdv");renderPdv()}function cancelarPdv(){if(!pdv.length)return;let login=prompt("Autorização para cancelar a venda.\nLogin do ADMINISTRADOR ou GERENTE:");if(login===null)return;let u=usuarios.find(a=>a.ativo&&a.login.toLowerCase()===String(login).trim().toLowerCase()&&(a.perfil==="ADMINISTRADOR"||a.perfil==="GERENTE"));if(!u)return alert("Usuário sem autorização para cancelar venda.");let senha=prompt("Senha/autorização de "+u.nome+":");if(senha===null)return;if(String(u.senha||"")!==String(senha))return alert("Senha/autorização inválida.");if(!confirm("Cancelar a venda atual?"))return;let itens=pdv.reduce((s,x)=>s+Number(x.qtd||0),0),valor=totalPdv();auditar("VENDA CANCELADA",itens+" item(ns) • "+moeda(valor)+" • autorizado por "+u.nome);pdv=[];pagamentosPdv=[];fecharPagamento();salvar();alert("Venda cancelada com autorização.")}function preencherRestantePagamento(){let e=document.getElementById("pagRecebido"),forma=document.getElementById("pagForma")?.value||"DINHEIRO",rest=Math.max(0,totalPdv()-totalPagamentos());if(!e)return;e.value=rest>0?rest.toFixed(2):"";e.select();if(forma==="DINHEIRO")e.focus()}
+function avKdsId(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;if(p.status==="ENVIADO")p.status="EM PREPARO";else if(p.status==="EM PREPARO")p.status="PRONTO";else return;localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderKds();renderRetirada();renderPedidos();renderDashboard()}function retirarPedido(i){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]");if(!ps[i]||ps[i].status!=="PRONTO")return;ps[i].status="RETIRADO";ps[i].retirado_em=new Date().toISOString();localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));auditar("PEDIDO RETIRADO",(ps[i].origem||"BALCÃO")+" • "+ps[i].id);renderKds();renderProducao();renderPedidos();renderRetirada();renderDashboard()}function renderRetirada(){let e=document.getElementById("retLista");if(!e)return;let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]").filter(p=>p.status==="PRONTO"||p.status==="ENTREGUE");e.innerHTML=ps.length?ps.map(p=>"<div class=\"card\"><b>"+(p.origem||"BALCÃO")+"</b><p class=\"muted\">"+p.hora+" • "+p.status+"</p><p>"+p.itens.map(x=>x.qtd+"x "+x.nome).join("<br>")+"</p>"+(p.status==="PRONTO"?"<button class=\"btn green\" onclick=\"entregarPedido(\'"+p.id+"\')\">MARCAR ENTREGUE</button>":"<span class=\"badge entregue\">ENTREGUE</span>")+"</div>").join(""):"<div class=\"card\">Nenhum pedido pronto.</div>"}function entregarPedido(id){let ps=JSON.parse(localStorage.getItem("cb_hom_cozinha")||"[]"),p=ps.find(x=>x.id===id);if(!p)return;p.status="ENTREGUE";localStorage.setItem("cb_hom_cozinha",JSON.stringify(ps));renderRetirada();renderKds();renderDashboard()}function sairMesaPdv(){localStorage.removeItem("cb_hom_mesa_pdv");renderPdv()}function cancelarPdv(){if(!pdv.length)return;let login=prompt("Autorização para cancelar a venda.\nLogin do ADMINISTRADOR ou GERENTE:");if(login===null)return;let u=usuarios.find(a=>a.ativo&&a.login.toLowerCase()===String(login).trim().toLowerCase()&&(a.perfil==="ADMINISTRADOR"||a.perfil==="GERENTE"));if(!u)return alert("Usuário sem autorização para cancelar venda.");let senha=prompt("Senha/autorização de "+u.nome+":");if(senha===null)return;if(String(u.senha||"")!==String(senha))return alert("Senha/autorização inválida.");if(!confirm("Cancelar a venda atual?"))return;let itens=pdv.reduce((s,x)=>s+Number(x.qtd||0),0),valor=totalPdv();auditar("VENDA CANCELADA",itens+" item(ns) • "+moeda(valor)+" • autorizado por "+u.nome);pdv=[];pagamentosPdv=[];ugDescontoVendaFrente=null;fecharPagamento();salvar();alert("Venda cancelada com autorização.")}function preencherRestantePagamento(){let e=document.getElementById("pagRecebido"),forma=document.getElementById("pagForma")?.value||"DINHEIRO",rest=Math.max(0,totalPdv()-totalPagamentos());if(!e)return;e.value=rest>0?rest.toFixed(2):"";e.select();if(forma==="DINHEIRO")e.focus()}
 // Crédito de troca: independente do crediário e confirmado no servidor.
 async function ugConsultarCreditoTroca(){
  const sel=document.getElementById('pagClienteNormal'),info=document.getElementById('ugTrocaSaldoPagamento');
@@ -1160,7 +1160,7 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  let pags=JSON.parse(JSON.stringify(pagamentosPdv)),forma=pags.length===1?pags[0].forma:"MISTO",
  vendaId="V-"+Date.now()+"-"+Math.random().toString(36).slice(2,10), tipoVenda=localStorage.getItem("cb_hom_tipo_venda")||"BALCÃO", mesaVenda=localStorage.getItem("cb_hom_mesa_pdv")||"", comandaVenda=localStorage.getItem("cb_hom_comanda_pdv")||"", ev={id:"VENDA-"+Date.now()+"-"+Math.random().toString(16).slice(2),tipo:"VENDA_PDV",tipoVenda:tipoVenda,mesa:mesaVenda,comanda:comandaVenda,criado_em:new Date().toISOString(),total:total,forma:forma,pagamentos:pags,itens:JSON.parse(JSON.stringify(pdv))};
  fila.push(ev);
- let venda={id:vendaId,data:new Date().toISOString().slice(0,10),hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),total:total,forma:forma,pagamentos:pags,tipoVenda:tipoVenda,origem:tipoVenda,mesa:mesaVenda,comanda:comandaVenda,itens:JSON.parse(JSON.stringify(pdv))}; let clienteNormalIdx=document.getElementById("pagClienteNormal")?.value||"";
+ let venda={id:vendaId,data:new Date().toISOString().slice(0,10),hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),total:total,forma:forma,pagamentos:pags,tipoVenda:tipoVenda,origem:tipoVenda,mesa:mesaVenda,comanda:comandaVenda,itens:JSON.parse(JSON.stringify(pdv)),subtotal:ugBrutoPdv(),desconto:ugDescontoVendaFrente?.valor||0,desconto_tipo:ugDescontoVendaFrente?.tipo||null,desconto_fiscal:ugDescontoVendaFrente?.fiscal||null,discount_token:ugDescontoVendaFrente?.token||null}; let clienteNormalIdx=document.getElementById("pagClienteNormal")?.value||"";
  let clienteVendaIdx=creditoPag>0&&clienteCreditoIdx!==""?clienteCreditoIdx:clienteNormalIdx;
  venda.cliente=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?clientes[Number(clienteVendaIdx)].nome:"";
  venda.clienteId=clienteVendaIdx!==""&&clientes[Number(clienteVendaIdx)]?Number(clienteVendaIdx):null;
@@ -1532,7 +1532,7 @@ function relatorioCaixaHtml(){
  }).join("");
  let movimentosDetalhados=(caixa.movs||[]).map(m=>'<tr><td>'+textoSeguroCaixa(m.hora)+'</td><td>'+textoSeguroCaixa(m.tipo)+'</td><td>'+textoSeguroCaixa(m.usuario_nome||'Não registrado')+'</td><td style="text-align:right">'+moeda(m.valor)+'</td></tr>').join('');
  let qtd=r.vs.length;
- let acrescimos=0,descontos=0,totalGeral=r.total;
+ let acrescimos=0,descontos=r.vs.reduce((a,v)=>a+Number(v.desconto||0),0),totalGeral=r.total;
 
  return '<div class="receipt-preview cb-fechamento-caixa">'+
  '<div class="rc-center rc-title">'+(config.empresa||"UniGestor")+'</div>'+
@@ -1803,8 +1803,8 @@ function htmlReciboFrenteCaixa(v){
  '<div class="fc-line"></div><div class="fc-row fc-strong"><span>RECIBO: '+esc(v.id||'-')+'</span><span>'+data+' '+hora+'</span></div>'+
  '<div>CONSUMIDOR: '+esc(v.cliente||'NÃO IDENTIFICADO')+'</div>'+
  '<div class="fc-line"></div><div class="fc-item fc-strong"><span>QTD DESCRIÇÃO</span><span>UNIT.</span><span>TOTAL</span></div><div class="fc-line"></div>'+linhas+
- '<div class="fc-line"></div><div class="fc-row"><span>Total Bruto dos Itens</span><span>'+valor(v.total)+'</span></div>'+
- '<div class="fc-row"><span>Desconto sobre Itens</span><span>'+valor(0)+'</span></div>'+
+ '<div class="fc-line"></div><div class="fc-row"><span>Total Bruto dos Itens</span><span>'+valor(v.subtotal??v.total)+'</span></div>'+
+ '<div class="fc-row"><span>Desconto sobre Itens</span><span>-'+valor(v.desconto||0)+'</span></div>'+
  '<div class="fc-row"><span>Acréscimo sobre Itens</span><span>'+valor(0)+'</span></div>'+
  '<div class="fc-row fc-strong"><span>Valor Total</span><span>'+valor(v.total)+'</span></div>'+pagos+
  '<div class="fc-row"><span>Troco</span><span>'+valor(0)+'</span></div>'+
@@ -3045,7 +3045,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(typeof window.ugCarregarGoogleReview==='function'){
    try{await window.ugCarregarGoogleReview()}catch(e){console.warn('Preferência de avaliação indisponível',e)}
   }
-  const itens=event.data.items,payments=event.data.pagamentos;
+  const itens=event.data.items,payments=event.data.pagamentos,desc=event.data.desconto;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
   if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'Módulo de registro de vendas indisponível. Reabra o UniGestor antes de cobrar.');
   const pendenteIgual=pdv.length===itens.length&&pdv.every((p,i)=>p.nome===itens[i].nome&&Number(p.qtd)===itens[i].qtd&&Number(p.preco)===itens[i].preco);
@@ -3054,7 +3054,10 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const produtos=Array.isArray(estoque)?estoque:[];
   for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!ugPoliticaEstoque()&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
   const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA',CREDITO_TROCA:'CREDITO_TROCA'};
-  const totalTransferido=itens.reduce((sum,x)=>sum+x.qtd*x.preco,0);
+  const brutoTransferido=Math.round(itens.reduce((sum,x)=>sum+x.qtd*x.preco,0)*100)/100;
+   const valorDesconto=desc?Number(desc.valor):0;
+   if(desc&&(!Number.isFinite(valorDesconto)||valorDesconto<=0||valorDesconto>=brutoTransferido||!Number.isInteger(Math.round(valorDesconto*100))||Math.abs(valorDesconto*100-Math.round(valorDesconto*100))>0.001||typeof desc.token!=='string'||desc.token.length<16))return reply(false,'Desconto fiscal inválido. Autorize novamente pelo F5.');
+   const totalTransferido=Math.round((brutoTransferido-valorDesconto)*100)/100;
   if(!Array.isArray(payments)||!payments.length||payments.length>12||!payments.every(p=>map[p.forma]&&Number.isFinite(p.valor)&&p.valor>0)||Math.abs(totalTransferido-payments.reduce((sum,p)=>sum+p.valor,0))>0.01)return reply(false,'Confira os valores e as formas de pagamento.');
   const clienteIdx=event.data.clienteIndex;
   const creditoTransferido=payments.filter(p=>p.forma==='CREDIARIO').reduce((a,p)=>a+p.valor,0);
@@ -3079,6 +3082,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   busy=true;
   try{
    if(!pendenteIgual)pdv.push(...itens.map(x=>({nome:x.nome,qtd:x.qtd,preco:x.preco})));
+    ugDescontoVendaFrente=desc?{valor:valorDesconto,tipo:desc.tipo,fiscal:desc.fiscal,token:desc.token}:null;
    localStorage.setItem('cb_hom_tipo_venda','BALCÃO');
    localStorage.removeItem('cb_hom_mesa_pdv');localStorage.removeItem('cb_hom_comanda_pdv');
    salvar();if(typeof renderPdv==='function')renderPdv();
@@ -3107,7 +3111,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    window.__ugFrenteCaixaReply=reply;window.__ugFrenteCaixaSilent=true;
    await confirmarPagamento();
    if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;const nova=vendas.find(v=>!idsAntes.has(v.id));if(nova)reply(true,{mensagem:'Venda registrada.',recibo:htmlReciboFrenteCaixa(nova)});else reply(false,'Finalização não confirmada. Confira o Histórico de Vendas e o caixa antes de tentar novamente.');}
-  }catch(err){fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
+  }catch(err){ugDescontoVendaFrente=null;fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
   finally{busy=false}
  });
 })();
