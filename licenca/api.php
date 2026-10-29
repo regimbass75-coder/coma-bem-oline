@@ -141,7 +141,14 @@ if($action==='authorize_password'){
   }
   if(count($matches)!==1){ug_login_rate($rateKey);outj(['ok'=>false,'erro'=>'Senha inválida ou autorização ambígua.'],401);}
   if(!ug_login_rate($rateKey,true))outj(['ok'=>false,'erro'=>'Falha no controle de tentativas.'],503);
-  outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
+  if(($input['purpose']??'')==='discount'){
+     $token=bin2hex(random_bytes(24));
+     $_SESSION['ug_discount_token_hash']=hash('sha256',$token);
+     $_SESSION['ug_discount_token_expires']=time()+300;
+     $_SESSION['ug_discount_authorizer']=(string)($matches[0]['name']??$matches[0]['login']??'Fiscal');
+     outj(['ok'=>true,'user'=>ug_user_payload($matches[0]),'discount_token'=>$token]);
+   }
+   outj(['ok'=>true,'user'=>ug_user_payload($matches[0])]);
 }
 // Preferências compartilhadas por empresa, com revisão para evitar perda por concorrência.
 // DAF: pre-venda interna por empresa; sem pagamento, estoque ou impressao.
@@ -628,6 +635,24 @@ if(in_array($action,['sales_list','sales_create'],true)){
     $v['usuario_login']=(string)($actor['login']??'');
     $v['registrado_em']=date('c');
     $v['total']=round((float)($v['total']??0),2);
+    $gross=0;
+    foreach($v['itens'] as $item){
+      if(!is_array($item)||!is_numeric($item['qtd']??null)||!is_numeric($item['preco']??null)||($item['qtd']??0)<=0||($item['preco']??0)<0)outj(['ok'=>false,'erro'=>'Itens inválidos.'],400);
+      $gross+=(float)$item['qtd']*(float)$item['preco'];
+    }
+    $gross=round($gross,2);
+    $discount=round((float)($v['desconto']??0),2);
+    if($discount<0||$discount>=$gross&&$discount>0||abs($v['total']-round($gross-$discount,2))>0.01)outj(['ok'=>false,'erro'=>'Total ou desconto divergente.'],400);
+    $paid=0;foreach($v['pagamentos'] as $pay){if(!is_array($pay)||!is_numeric($pay['valor']??null)||($pay['valor']??0)<=0)outj(['ok'=>false,'erro'=>'Pagamento inválido.'],400);$paid+=(float)$pay['valor'];}
+    if(abs(round($paid,2)-$v['total'])>0.01)outj(['ok'=>false,'erro'=>'Pagamentos não conferem com total líquido.'],400);
+    if($discount>0){
+      $token=(string)($v['discount_token']??'');
+      if($token===''||time()>(int)($_SESSION['ug_discount_token_expires']??0)||!hash_equals((string)($_SESSION['ug_discount_token_hash']??''),hash('sha256',$token)))outj(['ok'=>false,'erro'=>'Desconto sem autorização fiscal válida.'],403);
+      $v['desconto_fiscal']=(string)($_SESSION['ug_discount_authorizer']??'Fiscal');
+      unset($_SESSION['ug_discount_token_hash'],$_SESSION['ug_discount_token_expires'],$_SESSION['ug_discount_authorizer']);
+    }
+    unset($v['discount_token']);
+    $v['subtotal']=$gross;$v['desconto']=$discount;
     if($v['total']<0||$v['total']>100000000)outj(['ok'=>false,'erro'=>'Valor inválido.'],400);
     // Atomic redemption: both the available balance and the new sale are
     // checked under the same per-company sales lock.
