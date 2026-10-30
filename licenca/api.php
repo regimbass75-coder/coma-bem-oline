@@ -55,13 +55,18 @@ if($action==='login'){
   $senha=(string)($input['senha']??'');
   if($login===''||$senha==='')outj(['ok'=>false,'erro'=>'Informe usuário e senha.'],400);
   if(!ug_login_rate_check($login))outj(['ok'=>false,'erro'=>'Muitas tentativas. Aguarde 15 minutos.'],429);
+  // Login names may repeat in different companies. Resolve only by valid
+  // credentials; never pick a tenant arbitrarily when credentials collide.
   $matches=[];
-  foreach(read_json(USERS_FILE,[]) as $candidate)
-    if(is_array($candidate) && strtolower(trim((string)($candidate['login']??'')))===strtolower($login))$matches[]=$candidate;
-  if(count($matches)!==1){ug_login_rate($login);outj(['ok'=>false,'erro'=>'Usuário ou senha inválidos.'],401);}
+  foreach(read_json(USERS_FILE,[]) as $candidate){
+    if(!is_array($candidate)||strtolower(trim((string)($candidate['login']??'')))!==strtolower($login))continue;
+    if(ug_is_active($candidate)&&password_verify($senha,(string)($candidate['password_hash']??'')))$matches[]=$candidate;
+  }
+  if(count($matches)!==1){
+    ug_login_rate($login);
+    outj(['ok'=>false,'erro'=>count($matches)>1?'Há mais de uma empresa com estas credenciais. Solicite um login exclusivo ao administrador.':'Usuário ou senha inválidos.'],count($matches)>1?409:401);
+  }
   $u=$matches[0];
-  if(!$u||!ug_is_active($u)||!password_verify($senha,(string)($u['password_hash']??'')))
-    {ug_login_rate($login);outj(['ok'=>false,'erro'=>'Usuário ou senha inválidos.'],401);}
   $rid=(string)($u['restaurant_id']??'');
   if($rid===''||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Restaurante inativo ou inexistente.'],403);
   $lic=license_for_restaurant($rid);
