@@ -847,12 +847,16 @@ async function ugAtualizarPrecosEmpresa(){
   if(!r.ok)return;
   const d=await r.json();if(!d.ok||!d.disponivel||!Array.isArray(d.produtos)||!d.produtos.length)return;
   const demo=estoque.length===3&&['Hambúrguer','Refrigerante','Pizza'].every(n=>estoque.some(p=>p.nome===n));
-  if(!estoque.length||demo){estoque=d.produtos;localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque));}
-  else {
+  if(!estoque.length||demo||d.produtos.length>estoque.length){
+   estoque=d.produtos;
+   localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque));
+   ugStatusEstoque('Sincronizado com servidor: '+estoque.length+' produtos.');
+  }else{
    const remoto=new Map(d.produtos.map(p=>[String(p.nome||'').toLowerCase(),p]));
    let changed=false;
-   estoque.forEach(p=>{const r=remoto.get(String(p.nome||'').toLowerCase());if(r&&Number.isFinite(Number(r.preco))&&Number(p.preco)!==Number(r.preco)){p.preco=r.preco;changed=true}});
+   estoque.forEach(p=>{const x=remoto.get(String(p.nome||'').toLowerCase());if(x&&Number.isFinite(Number(x.preco))&&Number(p.preco)!==Number(x.preco)){p.preco=x.preco;changed=true}});
    if(changed)localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque));
+   if(d.produtos.length<estoque.length)ugStatusEstoque('ATENÇÃO: servidor tem '+d.produtos.length+' produtos e este navegador tem '+estoque.length+'. Produtos locais preservados.');
   }
   renderEstoque();renderPdv();renderBuscaPdv();
  }catch(e){}
@@ -879,7 +883,7 @@ async function ugBaixarEstoqueEmpresa(manual){
   const igual=JSON.stringify(estoque)===JSON.stringify(d.produtos);
   if(igual){ugStatusEstoque('Estoque atualizado: '+estoque.length+' produtos.');return}
   const padrao=estoque.length===3&&['Hambúrguer','Refrigerante','Pizza'].every(n=>estoque.some(p=>p.nome===n));
-  if(!manual&&!padrao){ugStatusEstoque('Estoque do servidor disponível ('+d.produtos.length+' produtos), mas há dados locais diferentes. Use Carregar estoque da empresa após fazer backup.');return;}
+  if(!manual&&!padrao&&d.produtos.length<=estoque.length){ugStatusEstoque('Estoque remoto: '+d.produtos.length+' produtos; local: '+estoque.length+'. Dados locais preservados.');return;}
   if(!padrao&&!confirm('Este navegador possui '+estoque.length+' produtos locais. Carregar '+d.produtos.length+' produtos do servidor substituirá somente o estoque local deste navegador. Faça backup antes de continuar.'))return;
   estoque=d.produtos;localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque));
   renderEstoque();renderPdv();renderBuscaPdv();ugStatusEstoque('Carregados '+estoque.length+' produtos da empresa.');
