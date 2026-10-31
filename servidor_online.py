@@ -174,7 +174,7 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'returns_list', 'returns_request', 'returns_approve', 'returns_balance', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'cash_state', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync', 'table_orders'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'returns_list', 'returns_request', 'returns_approve', 'returns_balance', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'cash_state', 'kitchen_sync', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync', 'table_orders'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
     if action == 'table_orders':
         from urllib.request import Request, urlopen
