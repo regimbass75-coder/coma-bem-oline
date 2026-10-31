@@ -1519,11 +1519,40 @@ function usuarioAtualCaixa(){
  return u&&(u.name||u.login)?{usuario_id:u.id?String(u.id):null,usuario_nome:String(u.name||u.login),usuario_login:String(u.login||'')}:{usuario_id:null,usuario_nome:'Não registrado',usuario_login:''};
 }
 function textoSeguroCaixa(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function abrirCaixa(){
+let ugCaixaRevision=0,ugCaixaBusy=false;
+async function ugConsultarCaixaCentral(){
+ if(!navigator.onLine||!window.__cbRestaurante?.id||!window.__cbUsuarioLogado)return;
+ const rid=String(window.__cbRestaurante.id);
+ const r=await fetch('./licenca/api.php?action=cash_state',{credentials:'same-origin',cache:'no-store'});
+ const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Caixa central indisponível.');
+ if(String(d.restaurant_id)!==rid)return;
+ if(d.disponivel&&d.state){
+  ugCaixaRevision=Number(d.state.revision)||0;
+  caixa={...caixa,...d.state,movs:Array.isArray(caixa.movs)?caixa.movs:[]};
+ }else{ugCaixaRevision=0;caixa={...caixa,aberto:false};}
+ localStorage.setItem('cb_hom_caixa',JSON.stringify(caixa));
+ renderCaixa();renderPdv();
+}
+async function ugAlterarCaixaCentral(operation,inicial){
+ if(ugCaixaBusy)return false;
+ if(!navigator.onLine||!window.__cbUsuarioLogado)throw Error('Conecte-se ao servidor para abrir ou fechar o caixa.');
+ ugCaixaBusy=true;
+ try{
+  await ugConsultarCaixaCentral();
+  const r=await fetch('./licenca/api.php?action=cash_state',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,inicial,revision:ugCaixaRevision})});
+  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível alterar o caixa.');
+  ugCaixaRevision=Number(d.state.revision)||0;
+  caixa={...caixa,...d.state,movs:operation==='open'?[]:(caixa.movs||[])};
+  localStorage.setItem('cb_hom_caixa',JSON.stringify(caixa));return true;
+ }finally{ugCaixaBusy=false;}
+}
+setInterval(()=>{if(document.visibilityState==='visible'&&window.__cbUsuarioLogado&&navigator.onLine)ugConsultarCaixaCentral().catch(console.warn)},5000);
+window.addEventListener('focus',()=>ugConsultarCaixaCentral().catch(console.warn));
+async function abrirCaixa(){
  if(caixa.aberto)return alert("O caixa já está aberto.");
  let v=parseFloat(prompt("Valor inicial do caixa:","0")||0);
  if(!(v>=0))return alert("Valor inicial inválido.");
- caixa={aberto:true,inicial:v,movs:[],aberto_em:new Date().toISOString()};
+ try{if(!await ugAlterarCaixaCentral('open',v))return;}catch(e){alert(e.message);return;}
  auditar("CAIXA ABERTO","Inicial "+moeda(v));salvar();renderCaixa();
 }
 function movCaixa(tipo){
@@ -1603,11 +1632,12 @@ function imprimirRelatorioCaixa(){
  let layer=document.createElement("div");layer.id="cbPrintLayer";layer.innerHTML=relatorioCaixaHtml();document.body.appendChild(layer);document.body.classList.add("cb-printing");
  setTimeout(()=>{window.print();setTimeout(()=>{document.body.classList.remove("cb-printing");document.getElementById("cbPrintLayer")?.remove()},500)},120);
 }
-function confirmarFechamentoCaixa(){
+async function confirmarFechamentoCaixa(){
  if(!caixa.aberto)return alert("O caixa já está fechado.");
  if(!confirm("Conferiu o relatório? Deseja fechar o caixa agora?"))return;
- caixa.aberto=false;caixa.fechado_em=new Date().toISOString();
- auditar("CAIXA FECHADO","Saldo esperado "+moeda(saldoCaixa()));
+ const saldo=saldoCaixa();
+ try{if(!await ugAlterarCaixaCentral("close",0))return;}catch(e){alert(e.message);return;}
+ auditar("CAIXA FECHADO","Saldo esperado "+moeda(saldo));
  salvar();document.getElementById("cxRelatorioModal")?.remove();renderCaixa();
 }
 function fecharCaixa(){abrirRelatorioCaixa();}
@@ -2201,7 +2231,7 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
  function esc(v){return String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
  async function serverSession(){
    try{const r=await fetch(API+'?action=me',{credentials:'same-origin',cache:'no-store'});const d=await r.json();
-     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));if(window.ugTenantSwitch&&await window.ugTenantSwitch(d.restaurant.id))return true;window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);await ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugCarregarPreferenciasEmpresa();setTimeout(()=>ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message)),300);window.ugAgendarMesasSync?.();document.documentElement.classList.add('ug-tenant-ready');return true;}
+     if(r.ok&&d.ok){sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));if(window.ugTenantSwitch&&await window.ugTenantSwitch(d.restaurant.id))return true;window.__cbUsuarioLogado=d.user;window.__cbRestaurante=d.restaurant;window.ugApplyModules?.(d);storeOffline(d);await ugBaixarEstoqueEmpresa(false);ugAtualizarPrecosEmpresa();ugConsultarCaixaCentral().catch(console.warn);ugCarregarPreferenciasEmpresa();setTimeout(()=>ugAtualizarClientesCentrais().catch(e=>console.warn('Clientes centrais:',e.message)),300);window.ugAgendarMesasSync?.();document.documentElement.classList.add('ug-tenant-ready');return true;}
    }catch(e){}
    return false;
  }
