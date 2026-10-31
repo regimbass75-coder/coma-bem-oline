@@ -48,12 +48,12 @@ function restaurarVendaPendente(){
   ultimoProduto=typeof saved.ultimoProduto==='string'?saved.ultimoProduto:null;
  }catch(e){console.error('Falha ao restaurar venda pendente',e)}
 }
-let ugCaixaCentralRevision=0,ugCaixaCentralBusy=false,ugCaixaCentralKnown=false;
+let ugCaixaCentralRevision=0,ugCaixaCentralBusy=false,ugCaixaCentralKnown=false,ugCaixaCentralErro='';
 async function ugSyncCaixaFrente(){
  if(!navigator.onLine)return;
  const r=await fetch('./licenca/api.php?action=cash_state',{credentials:'same-origin',cache:'no-store'});
  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível consultar o caixa central.');
- const c=cash();ugCaixaCentralRevision=Number(d.state?.revision)||0;ugCaixaCentralKnown=true;
+ const c=cash();ugCaixaCentralRevision=Number(d.state?.revision)||0;ugCaixaCentralKnown=true;ugCaixaCentralErro='';
  // The server owns the open/closed status; local sale movements remain local.
  const next=d.disponivel?{...c,...d.state,movs:Array.isArray(c.movs)?c.movs:[]}:{...c,aberto:false};
  localStorage.setItem(cashKey,JSON.stringify(next));refreshCash();
@@ -72,8 +72,8 @@ async function ugAlterarCaixaFrente(operation,inicial){
   localStorage.setItem(cashKey,JSON.stringify(next));refreshCash();return next;
  }finally{ugCaixaCentralBusy=false;}
 }
-setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine)ugSyncCaixaFrente().catch(e=>console.warn('Sincronização caixa:',e.message))},5000);
-window.addEventListener('focus',()=>ugSyncCaixaFrente().catch(console.warn));
+function ugFalhaSyncCaixaFrente(e){ugCaixaCentralErro=String(e?.message||e);ugCaixaCentralKnown=false;console.warn('Sincronização caixa:',ugCaixaCentralErro);refreshCash();}setInterval(()=>{if(document.visibilityState==='visible')ugSyncCaixaFrente().catch(ugFalhaSyncCaixaFrente)},5000);
+window.addEventListener('focus',()=>ugSyncCaixaFrente().catch(ugFalhaSyncCaixaFrente));
 const cashKey='cb_hom_caixa';const cash=()=>{try{return JSON.parse(localStorage.getItem(cashKey)||'{"aberto":false,"inicial":0,"movs":[]}')}catch(e){return {aberto:false,inicial:0,movs:[]}}};const permiteNegativo=()=>localStorage.getItem('ug_politica_estoque')==='permitir';const products=()=>{try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}};const ugPrecoPromocional=(p)=>{
  const normal=Number(p.preco)||0;
  try{
@@ -264,7 +264,7 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();e.stopImmediatePropagation();if(!e.ctrlKey&&!e.metaKey&&$('ugF5Modal').hidden)ugF5Abrir();
  }else if(!$('ugF5Modal').hidden&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();ugF5Fechar()}
 },true);
-function refreshCash(){let c=cash();if(c.aberto&&ugConsultaCaixaFechado)ugConsultaCaixaFechado=null;$('status').textContent=c.aberto?'CAIXA ABERTO':'CAIXA FECHADO';$('status').className=c.aberto?'cash-open':'cash-closed';}
+function refreshCash(){let c=cash();if(c.aberto&&ugConsultaCaixaFechado)ugConsultaCaixaFechado=null;$('status').textContent=ugCaixaCentralErro?'CAIXA SEM SINCRONIZAÇÃO':(!ugCaixaCentralKnown?'CONSULTANDO CAIXA...':(c.aberto?'CAIXA ABERTO':'CAIXA FECHADO'));$('status').className=ugCaixaCentralErro?'cash-closed':(c.aberto?'cash-open':'cash-closed');$('status').title=ugCaixaCentralErro||'Estado consultado no servidor';}
 async function openCash(){
  if(ugCaixaCentralBusy)return;
  try{
@@ -443,6 +443,6 @@ async function carregarImpressoras(){
 }
 get('cfgAtualizarImpressoras').onclick=carregarImpressoras;
 for(const id of cfgIds)if(saved[id]!=null)get(id).value=saved[id];
-carregarImpressoras();get('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=get(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));popup.alert('Configurações salvas.');popup.close()};get('cfgFechar').onclick=()=>popup.close();popup.focus();}catch(e){$('configErro').textContent='Acesso não autorizado: '+e.message}finally{btn.disabled=false}};$('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=$(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));alert('Preferências salvas neste navegador.');fecharCfg()};refreshClients();refreshOperator();restaurarVendaPendente();render();ugSyncCaixaFrente().catch(e=>console.warn('Sincronização inicial do caixa:',e.message));window.addEventListener('storage',e=>{if(e.key===cashKey)refreshCash();if(e.key==='cb_hom_clientes')refreshClients()});$('codigo').focus();
+carregarImpressoras();get('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=get(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));popup.alert('Configurações salvas.');popup.close()};get('cfgFechar').onclick=()=>popup.close();popup.focus();}catch(e){$('configErro').textContent='Acesso não autorizado: '+e.message}finally{btn.disabled=false}};$('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=$(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));alert('Preferências salvas neste navegador.');fecharCfg()};refreshClients();refreshOperator();restaurarVendaPendente();render();ugSyncCaixaFrente().catch(ugFalhaSyncCaixaFrente);window.addEventListener('storage',e=>{if(e.key===cashKey)refreshCash();if(e.key==='cb_hom_clientes')refreshClients()});$('codigo').focus();
 })();
 </script></body></html>
