@@ -595,6 +595,52 @@ if(in_array($action,['returns_list','returns_request','returns_approve','returns
  outj(['ok'=>true,'request'=>$row]);
 }
 // Estado compartilhado do caixa por empresa, com revisao e bloqueio atomico.
+// Fila de cozinha por empresa: uniao por ID e progresso monotônico dos status.
+if($action==='kitchen_sync'){
+ if(!in_array($_SERVER['REQUEST_METHOD']??'',['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido'],405);
+ start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+ if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida'],401);
+ $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+ if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado'],403);
+ $lic=license_for_restaurant($rid);
+ if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inválida'],403);
+ $perms=ug_effective_permissions($actor);
+ if(!array_intersect(['Cozinha/KDS','PDV/Vendas','Mesas','Garçom Mobile','Delivery'],$perms))outj(['ok'=>false,'erro'=>'Sem permissão para cozinha'],403);
+ $dir=DATA_DIR.'/empresa-cozinha';
+ if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível'],503);
+ $fp=@fopen($dir.'/'.hash('sha256',$rid).'.json','c+');
+ if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível'],503);
+ if(!flock($fp,LOCK_EX)){fclose($fp);outj(['ok'=>false,'erro'=>'Cozinha ocupada'],503);}
+ $raw=stream_get_contents($fp);$rows=$raw?json_decode($raw,true):[];
+ if(!is_array($rows)||!array_is_list($rows)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Fila inválida'],503);}
+ if($_SERVER['REQUEST_METHOD']==='POST'){
+  $body=file_get_contents('php://input');
+  if(strlen($body)>1500000){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Fila excede limite'],413);}
+  $input=json_decode($body,true);$incoming=$input['pedidos']??null;
+  if(!is_array($incoming)||!array_is_list($incoming)||count($incoming)>3000){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Pedidos inválidos'],400);}
+  $rank=['ENVIADO'=>0,'EM PREPARO'=>1,'PRONTO'=>2,'RETIRADO'=>3,'ENTREGUE'=>4];
+  $index=[];foreach($rows as $i=>$p)if(is_array($p)&&isset($p['id']))$index[(string)$p['id']]=$i;
+  foreach($incoming as $p){
+   if(!is_array($p))continue;
+   $id=(string)($p['id']??'');$status=(string)($p['status']??'ENVIADO');
+   if($id===''||strlen($id)>128||!isset($rank[$status]))continue;
+   if(!isset($index[$id])){
+    if(count($rows)>=10000)continue;
+    $p['status']=$status;$rows[]=$p;$index[$id]=count($rows)-1;
+   }else{
+    $i=$index[$id];$old=(string)($rows[$i]['status']??'ENVIADO');
+    if(($rank[$status]??0)>($rank[$old]??0)){
+      $rows[$i]['status']=$status;
+      if(isset($p['retirado_em']))$rows[$i]['retirado_em']=$p['retirado_em'];
+    }
+   }
+  }
+  $json=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao gravar cozinha'],503);}
+ }
+ flock($fp,LOCK_UN);fclose($fp);
+ outj(['ok'=>true,'pedidos'=>$rows]);
+}
 if($action==='cash_state'){
   if(!in_array($_SERVER['REQUEST_METHOD']??'', ['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
   start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
