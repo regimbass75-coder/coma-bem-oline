@@ -48,6 +48,32 @@ function restaurarVendaPendente(){
   ultimoProduto=typeof saved.ultimoProduto==='string'?saved.ultimoProduto:null;
  }catch(e){console.error('Falha ao restaurar venda pendente',e)}
 }
+let ugCaixaCentralRevision=0,ugCaixaCentralBusy=false,ugCaixaCentralKnown=false;
+async function ugSyncCaixaFrente(){
+ if(!navigator.onLine)return;
+ const r=await fetch('./licenca/api.php?action=cash_state',{credentials:'same-origin',cache:'no-store'});
+ const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível consultar o caixa central.');
+ const c=cash();ugCaixaCentralRevision=Number(d.state?.revision)||0;ugCaixaCentralKnown=true;
+ // The server owns the open/closed status; local sale movements remain local.
+ const next=d.disponivel?{...c,...d.state,movs:Array.isArray(c.movs)?c.movs:[]}:{...c,aberto:false};
+ localStorage.setItem(cashKey,JSON.stringify(next));refreshCash();
+ return next;
+}
+async function ugAlterarCaixaFrente(operation,inicial){
+ if(ugCaixaCentralBusy)return null;
+ ugCaixaCentralBusy=true;
+ try{
+  if(!navigator.onLine)throw Error('Conecte o computador à internet para abrir ou fechar o caixa.');
+  await ugSyncCaixaFrente();
+  const r=await fetch('./licenca/api.php?action=cash_state',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation,inicial,revision:ugCaixaCentralRevision})});
+  const d=await r.json();if(!r.ok||!d.ok)throw Error(d.erro||'Não foi possível atualizar o caixa.');
+  ugCaixaCentralRevision=Number(d.state.revision)||0;
+  const c=cash();const next={...c,...d.state,movs:operation==='open'?[]:(c.movs||[])};
+  localStorage.setItem(cashKey,JSON.stringify(next));refreshCash();return next;
+ }finally{ugCaixaCentralBusy=false;}
+}
+setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine)ugSyncCaixaFrente().catch(e=>console.warn('Sincronização caixa:',e.message))},5000);
+window.addEventListener('focus',()=>ugSyncCaixaFrente().catch(console.warn));
 const cashKey='cb_hom_caixa';const cash=()=>{try{return JSON.parse(localStorage.getItem(cashKey)||'{"aberto":false,"inicial":0,"movs":[]}')}catch(e){return {aberto:false,inicial:0,movs:[]}}};const permiteNegativo=()=>localStorage.getItem('ug_politica_estoque')==='permitir';const products=()=>{try{return JSON.parse(localStorage.getItem('cb_hom_estoque')||'[]')}catch(e){return []}};const ugPrecoPromocional=(p)=>{
  const normal=Number(p.preco)||0;
  try{
@@ -239,8 +265,29 @@ document.addEventListener('keydown',e=>{
  }else if(!$('ugF5Modal').hidden&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();ugF5Fechar()}
 },true);
 function refreshCash(){let c=cash();if(c.aberto&&ugConsultaCaixaFechado)ugConsultaCaixaFechado=null;$('status').textContent=c.aberto?'CAIXA ABERTO':'CAIXA FECHADO';$('status').className=c.aberto?'cash-open':'cash-closed';}
-function openCash(){const c=cash();if(c.aberto)return alert('O caixa já está aberto.');const str=prompt('Valor inicial do caixa (R$):','0,00');if(str===null)return;const n=Number(str.replace(/\\./g,'').replace(',','.'));if(!Number.isFinite(n)||n<0)return alert('Valor inválido.');ugConsultaCaixaFechado=null;cart=[];ultimoProduto=null;pagamentos=[];salvarVendaPendente();render();c.aberto=true;c.inicial=n;c.abertura=new Date().toISOString();c.movs=[];localStorage.setItem(cashKey,JSON.stringify(c));ugRegistrarFuncaoCaixa('ABERTURA DE CAIXA','Valor inicial '+money(n));refreshCash();alert('Caixa aberto.')}
-function closeCash(){const c=cash();if(!c.aberto)return;if(cart.length)return alert('Cancele ou conclua os itens antes de fechar o caixa.');if(!confirm('Deseja fechar o caixa?'))return;c.aberto=false;c.fechamento=new Date().toISOString();localStorage.setItem(cashKey,JSON.stringify(c));ugRegistrarFuncaoCaixa('FECHAMENTO DE CAIXA','Caixa fechado');refreshCash()}
+async function openCash(){
+ if(ugCaixaCentralBusy)return;
+ try{
+  const current=await ugSyncCaixaFrente();
+  if(current.aberto)return alert('O caixa já está aberto.');
+  const str=prompt('Valor inicial do caixa (R$):','0,00');if(str===null)return;
+  const n=Number(str.replace(/\\./g,'').replace(',','.'));
+  if(!Number.isFinite(n)||n<0)return alert('Valor inválido.');
+  await ugAlterarCaixaFrente('open',n);
+  ugConsultaCaixaFechado=null;cart=[];ultimoProduto=null;pagamentos=[];salvarVendaPendente();render();
+  ugRegistrarFuncaoCaixa('ABERTURA DE CAIXA','Valor inicial '+money(n));alert('Caixa aberto.');
+ }catch(e){alert('Não foi possível abrir o caixa: '+e.message)}
+}
+async function closeCash(){
+ if(ugCaixaCentralBusy)return;
+ try{
+  const current=await ugSyncCaixaFrente();if(!current.aberto)return alert('O caixa já está fechado.');
+  if(cart.length)return alert('Cancele ou conclua os itens antes de fechar o caixa.');
+  if(!confirm('Deseja fechar o caixa?'))return;
+  await ugAlterarCaixaFrente('close',0);
+  ugRegistrarFuncaoCaixa('FECHAMENTO DE CAIXA','Caixa fechado');
+ }catch(e){alert('Não foi possível fechar o caixa: '+e.message)}
+}
 function refreshClients(){let prev=$('cliente').value;let list=[];try{list=JSON.parse(localStorage.getItem('cb_hom_clientes')||'[]')}catch(e){}$('cliente').replaceChildren(new Option('Consumidor não identificado',''),...list.map((c,i)=>new Option(String(c.nome||'Cliente '+(i+1)),String(i))));$('cliente').value=prev}
 
 // F10: seleção de cliente sem alterar o carrinho nem os atalhos existentes.
@@ -396,6 +443,6 @@ async function carregarImpressoras(){
 }
 get('cfgAtualizarImpressoras').onclick=carregarImpressoras;
 for(const id of cfgIds)if(saved[id]!=null)get(id).value=saved[id];
-carregarImpressoras();get('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=get(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));popup.alert('Configurações salvas.');popup.close()};get('cfgFechar').onclick=()=>popup.close();popup.focus();}catch(e){$('configErro').textContent='Acesso não autorizado: '+e.message}finally{btn.disabled=false}};$('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=$(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));alert('Preferências salvas neste navegador.');fecharCfg()};refreshClients();refreshOperator();restaurarVendaPendente();render();window.addEventListener('storage',e=>{if(e.key===cashKey)refreshCash();if(e.key==='cb_hom_clientes')refreshClients()});$('codigo').focus();
+carregarImpressoras();get('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=get(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));popup.alert('Configurações salvas.');popup.close()};get('cfgFechar').onclick=()=>popup.close();popup.focus();}catch(e){$('configErro').textContent='Acesso não autorizado: '+e.message}finally{btn.disabled=false}};$('cfgSalvar').onclick=()=>{const settings={};for(const id of cfgIds)settings[id]=$(id).value;localStorage.setItem(cfgKey,JSON.stringify(settings));alert('Preferências salvas neste navegador.');fecharCfg()};refreshClients();refreshOperator();restaurarVendaPendente();render();ugSyncCaixaFrente().catch(e=>console.warn('Sincronização inicial do caixa:',e.message));window.addEventListener('storage',e=>{if(e.key===cashKey)refreshCash();if(e.key==='cb_hom_clientes')refreshClients()});$('codigo').focus();
 })();
 </script></body></html>
