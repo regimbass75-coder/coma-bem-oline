@@ -594,6 +594,56 @@ if(in_array($action,['returns_list','returns_request','returns_approve','returns
  if(!$ok)outj(['ok'=>false,'erro'=>'Falha ao registrar solicitação.'],503);
  outj(['ok'=>true,'request'=>$row]);
 }
+// Estado compartilhado do caixa por empresa, com revisao e bloqueio atomico.
+if($action==='cash_state'){
+  if(!in_array($_SERVER['REQUEST_METHOD']??'', ['GET','POST'],true))outj(['ok'=>false,'erro'=>'Método inválido.'],405);
+  start_app();try{$valid=ug_session_valid();}catch(Throwable $e){$valid=false;}
+  if(!$valid)outj(['ok'=>false,'erro'=>'Sessão inválida.'],401);
+  $actor=ug_user_by_session();$rid=(string)($_SESSION['restaurant_id']??'');
+  if(!$actor||!ug_restaurant_is_active($rid))outj(['ok'=>false,'erro'=>'Acesso negado.'],403);
+  $lic=license_for_restaurant($rid);
+  if(!$lic||status_license($lic)!=='ATIVA')outj(['ok'=>false,'erro'=>'Licença inválida.'],403);
+  $perms=ug_effective_permissions($actor);
+  if(!array_intersect(['PDV/Vendas','Caixa'],$perms)&&!in_array(strtoupper((string)($actor['role']??'')),['ADMINISTRADOR','GERENTE'],true))
+    outj(['ok'=>false,'erro'=>'Sem permissão de caixa.'],403);
+  $dir=DATA_DIR.'/empresa-caixa';
+  if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+  $file=$dir.'/'.hash('sha256',$rid).'.json';
+  $fp=@fopen($file,'c+');if(!$fp)outj(['ok'=>false,'erro'=>'Armazenamento indisponível.'],503);
+  if(!flock($fp,LOCK_EX)){fclose($fp);outj(['ok'=>false,'erro'=>'Caixa ocupado.'],503);}
+  $raw=stream_get_contents($fp);$state=$raw?json_decode($raw,true):null;
+  if($raw&&!is_array($state)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Estado do caixa inválido.'],503);}
+  if($_SERVER['REQUEST_METHOD']==='GET'){
+    flock($fp,LOCK_UN);fclose($fp);
+    outj(['ok'=>true,'disponivel'=>is_array($state),'state'=>$state,'restaurant_id'=>$rid]);
+  }
+  $body=file_get_contents('php://input');
+  if(strlen($body)>8192){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Dados excedem limite.'],413);}
+  $input=json_decode($body,true);
+  $op=(string)($input['operation']??'');
+  $expected=$input['revision']??null;
+  if(!is_array($input)||!in_array($op,['open','close'],true)||!is_int($expected)||$expected<0){
+    flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Operação inválida.'],400);
+  }
+  $revision=(int)($state['revision']??0);
+  if($expected!==$revision){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Estado alterado em outro computador. Atualize e tente novamente.','state'=>$state,'revision'=>$revision],409);}
+  $isOpen=(bool)($state['aberto']??false);
+  if(($op==='open'&&$isOpen)||($op==='close'&&!$isOpen)){
+    flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>$isOpen?'O caixa já está aberto.':'O caixa já está fechado.','state'=>$state],409);
+  }
+  if($op==='open'){
+    $initial=$input['inicial']??null;
+    if(!is_numeric($initial)||!is_finite((float)$initial)||$initial<0||$initial>100000000){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Valor inicial inválido.'],400);}
+    $state=['aberto'=>true,'inicial'=>round((float)$initial,2),'aberto_em'=>date('c'),'fechado_em'=>null,'revision'=>$revision+1,'alterado_por'=>(string)($actor['name']??$actor['login']??'')];
+  }else{
+    $state['aberto']=false;$state['fechado_em']=date('c');$state['revision']=$revision+1;$state['alterado_por']=(string)($actor['name']??$actor['login']??'');
+  }
+  $json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+  rewind($fp);
+  if(fwrite($fp,$json)!==strlen($json)||!ftruncate($fp,strlen($json))||!fflush($fp)){flock($fp,LOCK_UN);fclose($fp);outj(['ok'=>false,'erro'=>'Falha ao salvar caixa.'],503);}
+  flock($fp,LOCK_UN);fclose($fp);
+  outj(['ok'=>true,'state'=>$state,'restaurant_id'=>$rid]);
+}
 // Registro central de vendas: um arquivo independente por empresa, com trava
 // exclusiva e identificador idempotente. Nunca aceita restaurant_id do navegador.
 if(in_array($action,['sales_list','sales_create'],true)){
