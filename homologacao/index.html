@@ -2350,6 +2350,10 @@ async function refreshLicense(){let key=localStorage.getItem(STORE)||'';if(!key)
      sessionStorage.setItem(SESSION,JSON.stringify({id:d.user.id,login:d.user.login,nome:d.user.name,perfil:d.user.role,restaurant_id:d.restaurant.id,entrada:new Date().toISOString(),validado_em:Date.now(),user:d.user,restaurant:d.restaurant,modules:d.modules}));
      if(window.ugTenantSwitch&&await window.ugTenantSwitch(d.restaurant.id))return;window.__cbUsuarioLogado=d.user; window.__cbRestaurante=d.restaurant; window.ugApplyModules?.(d); storeOffline(d);if(typeof window.ugBaixarEstoqueEmpresa==='function'){try{await window.ugBaixarEstoqueEmpresa(false)}catch(syncErr){console.warn('Estoque: sincronização adiada',syncErr)}}else{console.warn('Estoque: função ainda não disponível; login preservado.')} window.ugAtualizarVendasCentrais?.();
      document.getElementById('cbLoginGate')?.remove();
+     document.documentElement.classList.add('ug-tenant-ready');
+     // Após remover a tela de login, reavaliar as permissões e reabrir o painel.
+     window.ugApplyModules?.(d);
+     window.ugAgendarCozinhaSync?.();
      window.ugAgendarMesasSync?.();
    }catch(e){
      if(m)m.textContent=e.message||'Não foi possível entrar.';
