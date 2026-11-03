@@ -912,7 +912,7 @@ async function ugSincronizarCozinha(){
 }
 setInterval(()=>{if(document.visibilityState==='visible')ugSincronizarCozinha().catch(e=>console.warn('Cozinha:',e.message))},5000);
 window.addEventListener('focus',()=>ugSincronizarCozinha().catch(console.warn));
-function ugReceberPedidosMesa(){
+async function ugReceberPedidosMesa(){
  if(!navigator.onLine||!window.__cbUsuarioLogado)return;
  try{
   const response=await fetch('./licenca/api.php?action=table_orders',{credentials:'same-origin',cache:'no-store'});
