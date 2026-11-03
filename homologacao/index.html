@@ -1,4 +1,31 @@
-<!doctype html><html lang="pt-BR"><head><script id="ug-company-local-isolation">
+<!doctype html><html lang="pt-BR"><head><script id="ug-navigation-independent-fix-20261102">
+(function(){
+ // Independent navigation: does not depend on the legacy main script initializing.
+ window.toggleMenu=function(id,button){
+  const panel=document.getElementById(id);
+  if(!panel||panel.hidden||getComputedStyle(panel).display==='none'&&!panel.classList.contains('hide'))return;
+  const opening=panel.classList.contains('hide');
+  document.querySelectorAll('aside.sidebar .submenu').forEach(el=>{if(el!==panel)el.classList.add('hide')});
+  panel.classList.toggle('hide',!opening);
+  document.querySelectorAll('aside.sidebar .menu-group > span').forEach(el=>el.textContent='▾');
+  const arrow=button&&button.querySelector(':scope > span');
+  if(arrow)arrow.textContent=opening?'▴':'▾';
+ };
+ document.addEventListener('click',function(event){
+  const button=event.target.closest('aside.sidebar nav button[data-v]');
+  if(!button||button.hidden||getComputedStyle(button).display==='none')return;
+  const section=document.getElementById(button.dataset.v);
+  if(!section)return;
+  document.querySelectorAll('aside.sidebar nav button[data-v]').forEach(el=>el.classList.remove('sel'));
+  button.classList.add('sel');
+  document.querySelectorAll('main section').forEach(el=>el.classList.add('hide'));
+  section.classList.remove('hide');
+  const renderers={FINANCEIRO:'renderFinanceiro',CONTAS:'renderContas',CAIXA:'renderCaixa',ESTOQUE:'renderEstoque',CADASTROS:'renderClientes',MESAS:'renderMesas',PEDIDOS:'renderPedidos',COZINHA:'renderKds',COMANDAS:'renderCmd',PDV:'renderPdv'};
+  const fn=window[renderers[button.dataset.v]];
+  if(typeof fn==='function'){try{fn()}catch(e){console.error('UniGestor: erro ao abrir '+button.dataset.v,e)}}
+ },false);
+})();
+</script><script id="ug-company-local-isolation">
 (function(){
  // Separate each company's browser data. Preserve existing data before switching.
  const OWNER='ug_tenant_local_owner_v2',PREFIX='ug_tenant_local_snapshot_v2_';
