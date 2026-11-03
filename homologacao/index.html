@@ -3377,7 +3377,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
     if(opening){
      // Only show groups that have already been authorized and made visible.
      const authorized=[...submenu.querySelectorAll('[data-v]')].some(x=>!x.hidden&&getComputedStyle(x).display!=='none');
-     if(authorized){submenu.style.removeProperty('display');submenu.hidden=false}
+     if(authorized){submenu.hidden=false;submenu.style.removeProperty('display');submenu.style.removeProperty('visibility');submenu.querySelectorAll('[data-v]').forEach(item=>{if(!item.hidden && item.style.display==='none')item.style.removeProperty('display')})}
      else{submenu.classList.add('hide');console.warn('Menu sem módulos autorizados:',id)}
     }
     const arrow=header.querySelector('span');if(arrow)arrow.textContent=opening?'▴':'▾';
