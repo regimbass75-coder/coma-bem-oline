@@ -40,9 +40,44 @@
   if(edit){const row=window.__ugStockCatalogRows?.[Number(edit.dataset.ugStockEdit)];if(row&&typeof window.editarProduto==='function'){
    const local=typeof estoque!=='undefined'&&Array.isArray(estoque)?estoque:[];
    const index=local.findIndex(p=>String(p.codigo||p.barras||p.nome)===String(row.codigo||row.barras||row.nome));
-   if(index>=0)window.editarProduto(index);else alert('Produto disponível no servidor, mas não carregado para edição neste aparelho. Use Carregar estoque da empresa antes de editar.');
+   window.__ugEditingServerProduct={...row};if(index>=0)window.editarProduto(index);
+   else{
+    for(const [id,key] of [['estCodigo','codigo'],['estBarras','barras'],['estNome','nome'],['estGrupo','grupo'],['estFornecedor','fornecedor'],['estCusto','custo'],['estMedio','preco_medio'],['estPreco','preco'],['estMin','minimo'],['estLocal','local'],['estUnidade','unidade']]){const el=document.getElementById(id);if(el)el.value=row[key]??''}
+    const qty=document.getElementById('estQtd');if(qty)qty.value=0;
+    document.getElementById('estNome')?.scrollIntoView({behavior:'smooth',block:'center'});
+   }
   }return}
   if(e.target.closest('button[data-v="ESTOQUE"]'))setTimeout(refresh,100);
+ },true);
+ document.addEventListener('click',async e=>{
+  const btn=e.target.closest('button[onclick="novoProduto()"]');
+  const original=window.__ugEditingServerProduct;
+  if(!btn||!original)return;
+  e.preventDefault();e.stopImmediatePropagation();
+  const name=document.getElementById('estNome')?.value.trim(),raw=document.getElementById('estPreco')?.value;
+  const price=Number(raw);
+  if(name!==original.nome){alert('Não altere o nome nesta edição. Salve primeiro o preço.');return}
+  if(raw===''||!Number.isFinite(price)||price<=0){alert('Informe um preço válido.');return}
+  const fields=[['estCodigo','codigo'],['estBarras','barras'],['estGrupo','grupo'],['estFornecedor','fornecedor'],['estCusto','custo'],['estMedio','preco_medio'],['estMin','minimo'],['estLocal','local'],['estUnidade','unidade']];
+  if(fields.some(([id,key])=>String(document.getElementById(id)?.value??'')!==String(original[key]??''))||Number(document.getElementById('estQtd')?.value||0)!==0){
+   alert('Esta atualização segura permite alterar somente o preço de venda. Os demais campos exigem sincronização própria.');return;
+  }
+  btn.disabled=true;
+  try{
+   const response=await fetch('./licenca/api.php?action=stock_price',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:original.nome,preco:price})});
+   const result=await response.json();
+   if(!response.ok||!result.ok)throw Error(result.erro||'Falha ao salvar no servidor');
+   const verify=await fetch('./licenca/api.php?action=stock_catalog',{credentials:'same-origin',cache:'no-store'});
+   const d=await verify.json();
+   if(!verify.ok||!d.ok||!Array.isArray(d.produtos))throw Error('Não foi possível confirmar a gravação');
+   const p=d.produtos.find(x=>String(x.nome)===String(original.nome));
+   if(!p||Math.abs(Number(p.preco)-price)>0.001)throw Error('Servidor não confirmou o novo preço');
+   window.__ugEditingServerProduct=null;
+   try{if(typeof estoque!=='undefined'){const local=estoque.find(x=>String(x.nome)===String(original.nome));if(local)local.preco=price;localStorage.setItem('cb_hom_estoque',JSON.stringify(estoque))}}catch(err){console.warn('Preço salvo no servidor; cache local não atualizado',err)}
+   await refresh();
+   alert('Preço confirmado no servidor: R$ '+price.toFixed(2).replace('.',','));
+  }catch(err){alert('Preço NÃO confirmado no servidor: '+err.message)}
+  finally{btn.disabled=false}
  },true);
  document.addEventListener('input',e=>{if(e.target?.id==='estBusca')refresh()});
  window.ugRefreshStockCatalog=refresh;
