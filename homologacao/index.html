@@ -1,4 +1,53 @@
-<!doctype html><html lang="pt-BR"><head><script id="ug-navigation-independent-fix-20261102">
+<!doctype html><html lang="pt-BR"><head><script id="ug-stock-catalog-independent-20261103">
+(function(){
+ let request=0;
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const money=v=>'R$ '+Number(v||0).toFixed(2).replace('.',',');
+ async function refresh(){
+  const table=document.getElementById('estLista');
+  if(!table||!window.__cbUsuarioLogado||!window.__cbRestaurante?.id)return;
+  const current=++request,tenant=String(window.__cbRestaurante.id);
+  try{
+   const response=await fetch('./licenca/api.php?action=stock_catalog',{credentials:'same-origin',cache:'no-store'});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   const d=await response.json();
+   if(current!==request||String(window.__cbRestaurante?.id)!==tenant)return;
+   if(!d.ok||!d.disponivel||!Array.isArray(d.produtos))return;
+   const rows=d.produtos;
+   const search=document.getElementById('estBusca');
+   const q=(search?.value||'').trim().toLocaleLowerCase('pt-BR');
+   const selected=rows.map((p,i)=>({...p,_i:i})).filter(p=>!q||[p.codigo,p.barras,p.nome,p.grupo,p.fornecedor].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q)));
+   const visible=selected.slice(0,20);
+   const info=document.getElementById('estBuscaInfo');
+   if(info)info.textContent='Catálogo da empresa: '+rows.length+' produtos. Exibindo '+visible.length+' de '+selected.length+'.';
+   table.innerHTML=visible.map(p=>{
+    const margin=Number(p.custo)>0?(Number(p.preco)-Number(p.custo))/Number(p.custo)*100:0;
+    const low=Number(p.qtd||0)<=Number(p.minimo??5);
+    return '<tr><td>'+esc(p.codigo||'-')+'</td><td>'+esc(p.barras||'-')+'</td><td><b>'+esc(p.nome)+'</b></td><td>'+esc(p.grupo||'-')+'</td><td>'+esc(p.fornecedor||'-')+'</td><td>'+money(p.custo)+'</td><td>'+money(p.preco_medio)+'</td><td>'+money(p.preco)+'</td><td>'+margin.toFixed(1)+'%</td><td>'+esc(p.unidade||'UN')+'</td><td>'+Number(p.qtd||0).toFixed(3).replace(/\\.000$/,'')+'</td><td>'+Number(p.minimo??5)+'</td><td>'+esc(p.local||'-')+'</td><td>'+(low?'ESTOQUE BAIXO':'OK')+'</td><td><button type="button" class="btn gold" data-ug-stock-edit="'+p._i+'">EDITAR</button></td></tr>';
+   }).join('')||'<tr><td colspan="15">Nenhum produto encontrado no catálogo da empresa.</td></tr>';
+   const sel=document.getElementById('movProduto');
+   if(sel)sel.innerHTML=rows.map(p=>'<option value="'+esc(p.nome)+'">'+esc(p.nome)+'</option>').join('');
+   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+   set('estResumoItens',rows.length);
+   set('estResumoBaixo',rows.filter(p=>Number(p.qtd||0)<=Number(p.minimo??5)).length);
+   set('estResumoCusto',money(rows.reduce((v,p)=>v+Number(p.qtd||0)*Number(p.custo||0),0)));
+   set('estResumoVenda',money(rows.reduce((v,p)=>v+Number(p.qtd||0)*Number(p.preco||0),0)));
+   window.__ugStockCatalogRows=rows;
+  }catch(e){console.warn('Cadastro: consulta de catálogo indisponível',e.message)}
+ }
+ document.addEventListener('click',e=>{
+  const edit=e.target.closest('[data-ug-stock-edit]');
+  if(edit){const row=window.__ugStockCatalogRows?.[Number(edit.dataset.ugStockEdit)];if(row&&typeof window.editarProduto==='function'){
+   const local=typeof estoque!=='undefined'&&Array.isArray(estoque)?estoque:[];
+   const index=local.findIndex(p=>String(p.codigo||p.barras||p.nome)===String(row.codigo||row.barras||row.nome));
+   if(index>=0)window.editarProduto(index);else alert('Produto disponível no servidor, mas não carregado para edição neste aparelho. Use Carregar estoque da empresa antes de editar.');
+  }return}
+  if(e.target.closest('button[data-v="ESTOQUE"]'))setTimeout(refresh,100);
+ },true);
+ document.addEventListener('input',e=>{if(e.target?.id==='estBusca')refresh()});
+ window.ugRefreshStockCatalog=refresh;
+})();
+</script><script id="ug-navigation-independent-fix-20261102">
 (function(){
  // Independent navigation: does not depend on the legacy main script initializing.
  window.toggleMenu=function(id,button){
