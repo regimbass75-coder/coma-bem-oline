@@ -3300,6 +3300,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
  window.addEventListener('message',async event=>{
   if(event.origin!==location.origin||event.data?.type!=='ug_frente_caixa_transfer_v1')return;
   if(!event.source||event.source.closed)return;
+  try{event.source.postMessage({type:'ug_frente_caixa_received_v1'},location.origin)}catch(e){console.warn('Frente de Caixa: recebimento',e)}
   const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message:typeof message==='string'?message:message?.mensagem,recibo:message?.recibo||null},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
   // A preferência de avaliação é por empresa, não por navegador.
