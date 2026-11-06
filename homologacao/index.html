@@ -3302,7 +3302,9 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(!event.source||event.source.closed)return;
   try{event.source.postMessage({type:'ug_frente_caixa_received_v1'},location.origin)}catch(e){console.warn('Frente de Caixa: recebimento',e)}
   const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message:typeof message==='string'?message:message?.mensagem,recibo:message?.recibo||null},location.origin)}catch(e){}};
+  const stage=step=>{try{event.source.postMessage({type:'ug_frente_caixa_stage_v1',step},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
+  stage('Validando produtos e pagamentos');
   // A preferência de avaliação é por empresa, não por navegador.
   // Atualiza antes de montar o recibo; falhas não bloqueiam nem repetem a venda.
   if(typeof window.ugCarregarGoogleReview==='function'){
@@ -3348,11 +3350,13 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(!caixa.aberto)return reply(false,'Abra o caixa antes de finalizar.');
   busy=true;
   try{
+   stage('Salvando carrinho');
    if(!pendenteIgual)pdv.push(...itens.map(x=>({nome:x.nome,qtd:x.qtd,preco:x.preco})));
     ugDescontoVendaFrente=desc?{valor:valorDesconto,tipo:desc.tipo,fiscal:desc.fiscal,token:desc.token}:null;
    localStorage.setItem('cb_hom_tipo_venda','BALCÃO');
    localStorage.removeItem('cb_hom_mesa_pdv');localStorage.removeItem('cb_hom_comanda_pdv');
    salvar();if(typeof renderPdv==='function')renderPdv();
+   stage('Preparando pagamento');
    abrirPagamento(true);
    const form=document.getElementById('pagForma'),value=document.getElementById('pagRecebido');
    if(!form||!value||typeof adicionarPagamento!=='function')throw Error('Tela de pagamento indisponível.');
@@ -3376,9 +3380,10 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    }
    const idsAntes=new Set(vendas.map(v=>v.id));
    window.__ugFrenteCaixaReply=reply;window.__ugFrenteCaixaSilent=true;
+   stage('Registrando venda');
    await confirmarPagamento();
    if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;const nova=vendas.find(v=>!idsAntes.has(v.id));if(nova)reply(true,{mensagem:'Venda registrada.',recibo:htmlReciboFrenteCaixa(nova)});else reply(false,'Finalização não confirmada. Confira o Histórico de Vendas e o caixa antes de tentar novamente.');}
-  }catch(err){ugDescontoVendaFrente=null;fecharPagamento();if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
+  }catch(err){console.error('Falha ao finalizar',err);stage('Erro: '+String(err.message||err).slice(0,100));ugDescontoVendaFrente=null;try{fecharPagamento()}catch(e){console.warn(e)}if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
   finally{busy=false}
  });
 })();
