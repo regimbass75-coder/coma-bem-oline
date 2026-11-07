@@ -1134,7 +1134,7 @@ async function delPdv(i){
  auditar('ITEM CANCELADO',x.qtd+'x '+x.nome+' • autorizado por '+(u.name||u.login||'Fiscal'));
  pdv.splice(i,1);salvar();renderCancelamentos();renderPdv();
 }
-let ugDescontoVendaFrente=null;function ugBrutoPdv(){return Math.round(pdv.reduce((s,i)=>s+i.preco*i.qtd,0)*100)/100}function totalPdv(){return Math.round(Math.max(0,ugBrutoPdv()-(ugDescontoVendaFrente?.valor||0))*100)/100}function definirTipoVenda(tipo,abrir){
+var ugDescontoVendaFrente=null;function ugBrutoPdv(){return Math.round(pdv.reduce((s,i)=>s+i.preco*i.qtd,0)*100)/100}function totalPdv(){return Math.round(Math.max(0,ugBrutoPdv()-(ugDescontoVendaFrente?.valor||0))*100)/100}function definirTipoVenda(tipo,abrir){
  const t=String(tipo||"BALCÃO").toUpperCase();
  localStorage.setItem("cb_hom_tipo_venda",t);
  if(t!=="MESA") localStorage.removeItem("cb_hom_mesa_pdv");
