@@ -3305,23 +3305,19 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const stage=step=>{try{event.source.postMessage({type:'ug_frente_caixa_stage_v1',step},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
   stage('Validando produtos e pagamentos');
-  // A preferência de avaliação é por empresa, não por navegador.
-  // Atualiza antes de montar o recibo; falhas não bloqueiam nem repetem a venda.
-  if(typeof window.ugCarregarGoogleReview==='function'){
-   // A preferência visual não pode travar a cobrança enquanto aguarda o Master.
-   try{await Promise.race([
-    Promise.resolve().then(()=>window.ugCarregarGoogleReview()),
-    new Promise(resolve=>setTimeout(resolve,1200))
-   ])}catch(e){console.warn('Preferência de avaliação indisponível',e)}
-  }
+  // Preferências de avaliação não fazem parte da validação financeira.
+  // Consultar sem bloquear a venda e sem permitir que a consulta interrompa o fluxo.
+  stage('Lendo itens recebidos');
   const itens=event.data.items,payments=event.data.pagamentos,desc=event.data.desconto;
   if(!Array.isArray(itens)||!itens.length||itens.length>200)return reply(false,'Itens inválidos.');
   if(typeof pdv==='undefined'||typeof abrirPagamento!=='function'||typeof confirmarPagamento!=='function')return reply(false,'Módulo de registro de vendas indisponível. Reabra o UniGestor antes de cobrar.');
+  stage('Conferindo carrinho e catálogo local');
   const pendenteIgual=pdv.length===itens.length&&pdv.every((p,i)=>p.nome===itens[i].nome&&Number(p.qtd)===itens[i].qtd&&Number(p.preco)===itens[i].preco);
   if(pdv.length&&!pendenteIgual)return reply(false,'Existe outra venda aberta no sistema. Confira antes de iniciar nova cobrança.');
   if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return reply(false,'Itens inválidos.');
   const produtos=Array.isArray(estoque)?estoque:[];
   for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!ugPoliticaEstoque()&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
+  stage('Conferindo formas de pagamento');
   const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA',CREDITO_TROCA:'CREDITO_TROCA'};
   const brutoTransferido=Math.round(itens.reduce((sum,x)=>sum+x.qtd*x.preco,0)*100)/100;
    const valorDesconto=desc?Number(desc.valor):0;
@@ -3347,6 +3343,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    if(c.ativo===false||c.ativo==='false')return reply(false,'Cliente inativo. Crédito não autorizado.');
    if(saldoCreditoCliente(c)+0.001<creditoTransferido)return reply(false,'Limite insuficiente. Disponível: '+moeda(saldoCreditoCliente(c)));
   }
+  stage('Verificando abertura do caixa');
   if(!caixa.aberto)return reply(false,'Abra o caixa antes de finalizar.');
   busy=true;
   try{
