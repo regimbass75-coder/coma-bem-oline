@@ -3284,6 +3284,11 @@ function renderClients(){const root=$('veListaClientes'),a=search($('veBuscaClie
 function tab(t){document.querySelectorAll('[data-ve-tab]').forEach(b=>b.classList.toggle('ve-active',b.dataset.veTab===t));for(const n of ['pedidos','estoque','clientes'])$('ve-'+n).hidden=n!==t;if(t==='estoque')listProducts('veListaEstoque',$('veBuscaEstoque').value,false);if(t==='clientes')renderClients();if(t==='pedidos'){$('veClientes').innerHTML=clients().map(c=>`<option value="${esc(c.nome)}"></option>`).join('');renderOrders()}}
 document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;document.querySelectorAll('[data-ve-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.veTab));$('veBuscaPedido').oninput=e=>listProducts('veResultadosPedido',e.target.value,true);$('veBtnBuscaPedido').onclick=()=>listProducts('veResultadosPedido',$('veBuscaPedido').value,true);$('veBuscaEstoque').oninput=e=>listProducts('veListaEstoque',e.target.value,false);$('veBuscaCliente').oninput=renderClients;$('veSalvar').onclick=async()=>{if(!save())return;await syncExternalOrders();const pendente=pendingOrders().length>0;clear();alert(pendente?'Pedido salvo neste aparelho, aguardando sincronização. A tela está pronta para novo pedido.':'Pedido salvo e enviado ao servidor. A tela está pronta para novo pedido.');};$('veFinalizar').onclick=finish;$('veLimpar').onclick=clear;$('veAbrirCadastro').onclick=()=>{const destino=document.querySelector('.nav button[data-v="CADASTROS"]');if(destino){destino.click();document.getElementById('CADASTROS')?.scrollIntoView({behavior:'smooth',block:'start'});}else if(typeof abrirTela==='function'){abrirTela('CADASTROS');}else alert('Cadastro de clientes indisponível.');};renderCart();tab('pedidos');syncExternalOrders();setInterval(syncExternalOrders,15000)});
 })();
+</script><script id="ug-stock-policy-bootstrap-20261106">
+/* Loaded independently of the legacy PDV script, which may stop before assigning the policy. */
+window.ugPoliticaEstoque=function(){
+ try{return localStorage.getItem('ug_politica_estoque')==='permitir'}catch(e){return false}
+};
 </script><script id="ug-frente-caixa-integration">
 (function(){
  const button=document.getElementById('ugAbrirFrenteCaixa');
@@ -3317,7 +3322,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   if(pdv.length&&!pendenteIgual)return reply(false,'Existe outra venda aberta no sistema. Confira antes de iniciar nova cobrança.');
   if(!itens.every(x=>typeof x.nome==='string'&&x.nome.length<200&&Number.isInteger(x.qtd)&&x.qtd>0&&Number.isFinite(x.preco)&&x.preco>=0))return reply(false,'Itens inválidos.');
   const produtos=Array.isArray(estoque)?estoque:[];
-  for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!ugPoliticaEstoque()&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
+  for(const item of itens){const p=produtos.find(p=>p.nome===item.nome);if(!p)return reply(false,'Produto não encontrado no estoque atualizado: '+item.nome);if(Math.abs(Number(p.preco)-item.preco)>0.001)return reply(false,'Preço divergente de '+item.nome+'. Atualize a Frente de Caixa antes de cobrar.');if(!(typeof window.ugPoliticaEstoque==='function'&&window.ugPoliticaEstoque())&&Number(p.qtd)<item.qtd)return reply(false,'Estoque insuficiente: '+item.nome); }
   stage('Conferindo formas de pagamento');
   const map={DINHEIRO:'DINHEIRO',PIX:'PIX',DEBITO:'CARTAO',CREDITO:'CARTAO',CREDIARIO:'CREDITO_LOJA',CREDITO_TROCA:'CREDITO_TROCA'};
   const brutoTransferido=Math.round(itens.reduce((sum,x)=>sum+x.qtd*x.preco,0)*100)/100;
