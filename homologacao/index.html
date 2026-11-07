@@ -3304,6 +3304,7 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
   const reply=(ok,message)=>{try{event.source.postMessage({type:'ug_frente_caixa_result_v1',ok,message:typeof message==='string'?message:message?.mensagem,recibo:message?.recibo||null},location.origin)}catch(e){}};
   const stage=step=>{try{event.source.postMessage({type:'ug_frente_caixa_stage_v1',step},location.origin)}catch(e){}};
   if(busy)return reply(false,'Há uma finalização em andamento.');
+  try{
   stage('Validando produtos e pagamentos');
   // Preferências de avaliação não fazem parte da validação financeira.
   // Consultar sem bloquear a venda e sem permitir que a consulta interrompa o fluxo.
@@ -3382,6 +3383,12 @@ document.addEventListener('DOMContentLoaded',()=>{if(!$('VENDA_EXTERNA'))return;
    if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;const nova=vendas.find(v=>!idsAntes.has(v.id));if(nova)reply(true,{mensagem:'Venda registrada.',recibo:htmlReciboFrenteCaixa(nova)});else reply(false,'Finalização não confirmada. Confira o Histórico de Vendas e o caixa antes de tentar novamente.');}
   }catch(err){console.error('Falha ao finalizar',err);stage('Erro: '+String(err.message||err).slice(0,100));ugDescontoVendaFrente=null;try{fecharPagamento()}catch(e){console.warn(e)}if(window.__ugFrenteCaixaReply){window.__ugFrenteCaixaReply=null;reply(false,'Não foi possível finalizar automaticamente: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');}else reply(false,'Erro na transferência: '+err.message+'. Confira o Histórico de Vendas e o caixa antes de repetir.');window.__ugFrenteCaixaSilent=false;}
   finally{busy=false}
+  }catch(err){
+   console.error('Frente de Caixa: erro na validação ou finalização',err);
+   stage('Erro de validação: '+String(err?.message||err).slice(0,130));
+   reply(false,'Falha ao processar a venda: '+String(err?.message||err)+'. Confira o Histórico antes de repetir.');
+   busy=false;
+  }
  });
 })();
 </script><script id="ug-daf-prevenda-v1">
