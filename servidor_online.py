@@ -268,21 +268,25 @@ def homolog_master_bridge():
                 if not isinstance(m, dict) or type(m.get('numero')) is not int or m['numero'] < 1 or m['numero'] > 500 or m['numero'] in seen or m.get('status') not in ('LIVRE', 'OCUPADA', 'FECHADA'):
                     return jsonify({'ok': False, 'erro': 'Mesa inválida.'}), 400
                 seen.add(m['numero'])
-                clean.append({'numero': m['numero'], 'status': m['status']})
+                items = m.get('itens', [])
+                if not isinstance(items, list) or len(items) > 300 or any(not isinstance(item, dict) for item in items):
+                    return jsonify({'ok': False, 'erro': 'Produtos da mesa inválidos.'}), 400
+                clean.append({**m, 'itens': items})
         try:
             with get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute('CREATE TABLE IF NOT EXISTS ug_mesas_mobile (restaurant_id TEXT PRIMARY KEY, mesas JSONB NOT NULL, atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW())')
                     if request.method == 'POST':
-                        cur.execute('CREATE TABLE IF NOT EXISTS ug_pedidos_mesa (restaurant_id TEXT NOT NULL, pedido_id TEXT NOT NULL, mesa INTEGER NOT NULL, dados JSONB NOT NULL, criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(restaurant_id,pedido_id))')
-                        cur.execute("SELECT DISTINCT mesa FROM ug_pedidos_mesa WHERE restaurant_id=%s",(company,))
-                        occupied={int(row[0]) for row in cur.fetchall()}
-                        for table in clean:
-                            if table['numero'] in occupied and table['status']=='LIVRE': table['status']='OCUPADA'
-                        cur.execute('INSERT INTO ug_mesas_mobile (restaurant_id, mesas, atualizado_em) VALUES (%s,%s::jsonb,NOW()) ON CONFLICT (restaurant_id) DO UPDATE SET mesas=EXCLUDED.mesas, atualizado_em=NOW()', (company, json.dumps(clean)))
+                        cur.execute('SELECT mesas, atualizado_em FROM ug_mesas_mobile WHERE restaurant_id=%s FOR UPDATE', (company,))
+                        previous = cur.fetchone()
+                        revision = int(previous[1].timestamp() * 1000000) if previous else 0
+                        expected = payload.get('revision')
+                        if expected is not None and int(expected) != revision:
+                            return jsonify({'ok': False, 'erro': 'Mesas alteradas em outro computador.', 'revision': revision, 'mesas': previous[0] if previous else []}), 409
+                        cur.execute('INSERT INTO ug_mesas_mobile (restaurant_id, mesas, atualizado_em) VALUES (%s,%s::jsonb,clock_timestamp()) ON CONFLICT (restaurant_id) DO UPDATE SET mesas=EXCLUDED.mesas, atualizado_em=clock_timestamp()', (company, json.dumps(clean)))
                     cur.execute('SELECT mesas, atualizado_em FROM ug_mesas_mobile WHERE restaurant_id=%s', (company,))
                     row = cur.fetchone()
-            return jsonify({'ok': True, 'disponivel': bool(row), 'mesas': row[0] if row else [], 'atualizado_em': row[1].isoformat() if row else None})
+            return jsonify({'ok': True, 'disponivel': bool(row), 'mesas': row[0] if row else [], 'revision': int(row[1].timestamp() * 1000000) if row else 0, 'atualizado_em': row[1].isoformat() if row else None})
         except Exception:
             app.logger.exception('Falha na sincronização de mesas')
             return jsonify({'ok': False, 'erro': 'Armazenamento de mesas indisponível.'}), 503
