@@ -1023,7 +1023,7 @@ async function ugPublicarMesas(){
   const base=new Map(ugMesasBase.map(x=>[String(x.numero),x]));
   const current=new Map(mesas.map(x=>[String(x.numero),x]));
   const changed=new Set([...base.keys(),...current.keys()].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(current.get(k))));
-  if(!changed.size){ugMesasBase=structuredClone(remote);ugMesasRevision=rev;if(ugMesasJson(mesas)!==ugMesasJson(remote))ugMesasAplicarRemoto(remote);return}
+  if(!changed.size){if(ugMesasJson(mesas)!==ugMesasJson(remote))ugMesasAplicarRemoto(remote);ugMesasBase=structuredClone(remote);ugMesasRevision=rev;return}
   const serverMap=new Map(remote.map(x=>[String(x.numero),x]));
   const conflicts=[...changed].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(serverMap.get(k)));
   if(conflicts.length){
@@ -1032,8 +1032,9 @@ async function ugPublicarMesas(){
    try{localStorage.setItem('ug_mesas_conflito_backup_'+tenant,ugMesasJson(mesas))}catch(e){}
    const reconciled=new Map(current);
    for(const k of conflicts){if(serverMap.has(k))reconciled.set(k,serverMap.get(k));else reconciled.delete(k)}
-   ugMesasBase=ugMesasNormalizar(remote);ugMesasRevision=rev;
+   // Apply while the previous base is still available to distinguish local edits.
    ugMesasAplicarRemoto([...reconciled.values()].sort((a,b)=>Number(a.numero)-Number(b.numero)));
+   ugMesasBase=ugMesasNormalizar(remote);ugMesasRevision=rev;
    console.warn('Mesas atualizadas no outro computador; conflito resolvido pelo servidor:',conflicts);
    return;
   }
@@ -1045,9 +1046,9 @@ async function ugPublicarMesas(){
   if(saved.status===409){ugMesasBase=structuredClone(remote);ugMesasRevision=rev;return}
   if(!saved.ok||!result.ok)throw Error(result.erro||'Não foi possível salvar mesas');
   if(String(window.__cbRestaurante?.id)!==tenant)return;
-  ugMesasBase=structuredClone(next);ugMesasRevision=Number(result.revision);
   // Do not replace local edits that occurred while awaiting the server.
   if(ugMesasJson([...current.values()])===ugMesasJson(mesas))ugMesasAplicarRemoto(next);
+  ugMesasBase=structuredClone(next);ugMesasRevision=Number(result.revision);
  }catch(e){console.warn('Sincronização das mesas:',e.message)}
  finally{ugMesasBusy=false}
 }
