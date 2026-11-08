@@ -952,13 +952,59 @@ function salvarInterno(){
    if(table){table.itens=pdv.map(x=>({...x}));table.total=table.itens.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0)}
   }
  }catch(e){console.warn('Falha ao guardar carrinho da mesa',e)}
- localStorage.setItem("cb_hom_config",JSON.stringify(config));localStorage.setItem("cb_hom_usuarios",JSON.stringify(usuarios));localStorage.setItem("cb_hom_contas",JSON.stringify(contas));localStorage.setItem("cb_hom_garcom",JSON.stringify(garPedido));localStorage.setItem("cb_hom_clientes",JSON.stringify(clientes));localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));localStorage.setItem("cb_hom_fila",JSON.stringify(fila));localStorage.setItem("cb_hom_estoque",JSON.stringify(estoque));localStorage.setItem("cb_hom_pdv",JSON.stringify(pdv));localStorage.setItem("cb_hom_vendas",JSON.stringify(vendas));localStorage.setItem("cb_hom_cmd",JSON.stringify(comandas));localStorage.setItem("cb_hom_del",JSON.stringify(deliveries));localStorage.setItem("cb_hom_caixa",JSON.stringify(caixa));renderCmd();renderDel();renderCaixa();renderPdv();renderEstoque();renderFinanceiro();renderHistorico();renderRelatorios();renderClientes();renderMesas();renderGarcom();renderKds();renderContas();renderUsuarios();renderProprietario();renderComissoes();renderNet()}let pdvSelecionadoNome="";window.usuarios=usuarios;let ugMesasSyncTimer=null;
-function ugPublicarMesas(){
- if(!navigator.onLine||!Array.isArray(mesas))return;
- fetch('./licenca/api.php?action=tables_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({mesas:mesas.map(m=>({numero:m.numero,status:m.status}))})}).then(r=>r.json()).then(d=>{if(!d.ok)console.warn('Sincronização das mesas:',d.erro)}).catch(e=>console.warn('Mesas offline:',e.message));
+ localStorage.setItem("cb_hom_config",JSON.stringify(config));localStorage.setItem("cb_hom_usuarios",JSON.stringify(usuarios));localStorage.setItem("cb_hom_contas",JSON.stringify(contas));localStorage.setItem("cb_hom_garcom",JSON.stringify(garPedido));localStorage.setItem("cb_hom_clientes",JSON.stringify(clientes));localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));localStorage.setItem("cb_hom_fila",JSON.stringify(fila));localStorage.setItem("cb_hom_estoque",JSON.stringify(estoque));localStorage.setItem("cb_hom_pdv",JSON.stringify(pdv));localStorage.setItem("cb_hom_vendas",JSON.stringify(vendas));localStorage.setItem("cb_hom_cmd",JSON.stringify(comandas));localStorage.setItem("cb_hom_del",JSON.stringify(deliveries));localStorage.setItem("cb_hom_caixa",JSON.stringify(caixa));renderCmd();renderDel();renderCaixa();renderPdv();renderEstoque();renderFinanceiro();renderHistorico();renderRelatorios();renderClientes();renderMesas();renderGarcom();renderKds();renderContas();renderUsuarios();renderProprietario();renderComissoes();renderNet()}let pdvSelecionadoNome="";window.usuarios=usuarios;let ugMesasSyncTimer=null,ugMesasRevision=null,ugMesasBase=null,ugMesasBusy=false,ugMesasTenant=null;
+const ugMesasJson=x=>JSON.stringify(x||[]);
+function ugMesasAplicarRemoto(rows){
+ const active=localStorage.getItem('cb_hom_tipo_venda')==='MESA'?localStorage.getItem('cb_hom_mesa_pdv'):null;
+ mesas=rows.map(x=>({...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]}));
+ localStorage.setItem('cb_hom_mesas',ugMesasJson(mesas));
+ if(active){const selected=mesas.find(x=>String(x.numero)===String(active));if(selected)pdv=selected.itens.map(x=>({...x}));localStorage.setItem('cb_hom_pdv',ugMesasJson(pdv))}
+ renderMesas();renderPdv();
 }
-function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,1800)}
+async function ugPublicarMesas(){
+ if(ugMesasBusy||!navigator.onLine||!window.__cbUsuarioLogado||!window.__cbRestaurante?.id)return;
+ ugMesasBusy=true;
+ const tenant=String(window.__cbRestaurante.id);
+ try{
+  const response=await fetch('./licenca/api.php?action=tables_sync',{credentials:'same-origin',cache:'no-store'});
+  const server=await response.json();
+  if(!response.ok||!server.ok||!Array.isArray(server.mesas))throw Error(server.erro||'Não foi possível consultar mesas');
+  if(String(window.__cbRestaurante?.id)!==tenant)return;
+  const remote=server.mesas,rev=Number(server.revision||0);
+  if(ugMesasTenant!==tenant){ugMesasTenant=tenant;ugMesasRevision=null;ugMesasBase=null}
+  if(ugMesasBase===null){
+   if(server.disponivel){
+    if(ugMesasJson(mesas)!==ugMesasJson(remote)&&mesas.length){
+     try{localStorage.setItem('ug_mesas_backup_pre_sync_'+tenant,ugMesasJson(mesas))}catch(e){console.warn('Backup de mesas:',e)}
+    }
+    ugMesasBase=structuredClone(remote);ugMesasRevision=rev;ugMesasAplicarRemoto(remote);return;
+   }
+   ugMesasBase=[];ugMesasRevision=rev;
+  }
+  const base=new Map(ugMesasBase.map(x=>[String(x.numero),x]));
+  const current=new Map(mesas.map(x=>[String(x.numero),x]));
+  const changed=new Set([...base.keys(),...current.keys()].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(current.get(k))));
+  if(!changed.size){ugMesasBase=structuredClone(remote);ugMesasRevision=rev;if(ugMesasJson(mesas)!==ugMesasJson(remote))ugMesasAplicarRemoto(remote);return}
+  const serverMap=new Map(remote.map(x=>[String(x.numero),x]));
+  const conflicts=[...changed].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(serverMap.get(k)));
+  if(conflicts.length){console.warn('Conflito de mesas',conflicts);return}
+  const merged=new Map(serverMap);
+  for(const k of changed){if(current.has(k))merged.set(k,current.get(k));else merged.delete(k)}
+  const next=[...merged.values()].sort((x,y)=>Number(x.numero)-Number(y.numero));
+  const saved=await fetch('./licenca/api.php?action=tables_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:rev,mesas:next})});
+  const result=await saved.json();
+  if(saved.status===409){ugMesasBase=structuredClone(remote);ugMesasRevision=rev;return}
+  if(!saved.ok||!result.ok)throw Error(result.erro||'Não foi possível salvar mesas');
+  if(String(window.__cbRestaurante?.id)!==tenant)return;
+  ugMesasBase=structuredClone(next);ugMesasRevision=Number(result.revision);
+  // Do not replace local edits that occurred while awaiting the server.
+  if(ugMesasJson([...current.values()])===ugMesasJson(mesas))ugMesasAplicarRemoto(next);
+ }catch(e){console.warn('Sincronização das mesas:',e.message)}
+ finally{ugMesasBusy=false}
+}
+function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,650)}
 window.ugAgendarMesasSync=ugAgendarMesasSync;
+setInterval(ugPublicarMesas,3500);
 async // Cozinha compartilhada: guarda os pedidos locais e une pelo ID com o servidor.
 // Não apaga registros locais durante a migração de computadores antigos.
 let ugCozinhaSyncBusy=false,ugCozinhaSyncPending=false,ugCozinhaSyncTimer=null;
