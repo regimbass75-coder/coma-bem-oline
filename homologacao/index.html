@@ -1961,9 +1961,15 @@ setInterval(()=>{if(document.visibilityState==='visible'&&window.__cbUsuarioLoga
 window.addEventListener('focus',()=>ugConsultarCaixaCentral().catch(console.warn));
 async function abrirCaixa(){
  if(caixa.aberto)return alert("O caixa já está aberto.");
- let v=parseFloat(prompt("Valor inicial do caixa:","0")||0);
- if(!(v>=0))return alert("Valor inicial inválido.");
- try{if(!await ugAlterarCaixaCentral('open',v))return;}catch(e){alert(e.message);return;}
+ if(ugCaixaBusy)return alert("Aguarde a operação anterior do caixa terminar.");
+ const resposta=prompt("Valor inicial do caixa:","0");
+ if(resposta===null)return;
+ const v=Number(String(resposta).trim().replace(',','.'));
+ if(!Number.isFinite(v)||v<0)return alert("Valor inicial inválido.");
+ try{
+  const ok=await ugAlterarCaixaCentral('open',v);
+  if(!ok)return alert("Não foi possível iniciar a abertura do caixa. Tente novamente.");
+ }catch(e){alert("Falha ao abrir caixa: "+(e?.message||String(e)));return;}
  auditar("CAIXA ABERTO","Inicial "+moeda(v));salvar();renderCaixa();
 }
 function movCaixa(tipo){
