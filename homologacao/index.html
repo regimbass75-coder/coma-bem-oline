@@ -1660,15 +1660,38 @@ function renderGarcom(){let sm=document.getElementById("garMesa"),sp=document.ge
  }
  // Never reuse the previous table's cart.
  pdv=(Array.isArray(m.itens)?m.itens:[]).map(x=>({...x}));
- m.status="OCUPADA";if(!m.abertura)m.abertura=new Date().toISOString();if(!m.pessoas)m.pessoas=1;if(!m.pedido_numero)m.pedido_numero="M-"+String(m.numero)+"-"+Date.now().toString().slice(-5);localStorage.setItem("cb_hom_tipo_venda","MESA");localStorage.setItem("cb_hom_mesa_pdv",String(m.numero));salvar();document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("sel"));let b=document.querySelector('.nav button[data-v="PDV"]');if(b)b.classList.add("sel");document.querySelectorAll("main section").forEach(x=>x.classList.add("hide"));document.getElementById("PDV").classList.remove("hide");renderPdv();document.getElementById("pdvBusca")?.focus()}function alterarQuantidadeMesas(){let q=Math.floor(Number(document.getElementById("mesaQuantidade").value||0));if(q<1||q>500)return alert("Informe uma quantidade entre 1 e 500 mesas.");let atuais=mesas.length;if(q===atuais)return alert("A quantidade já é "+q+".");if(q<atuais){let removidas=mesas.filter(m=>Number(m.numero)>q),ativas=removidas.filter(m=>m.status!=="LIVRE");if(ativas.length&&!confirm("Existem "+ativas.length+" mesa(s) ocupada(s) ou fechada(s) acima da nova quantidade. Deseja remover mesmo assim?"))return;mesas=mesas.filter(m=>Number(m.numero)<=q)}else{for(let n=atuais+1;n<=q;n++)mesas.push({numero:n,status:"LIVRE"})}localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));salvar();alert("Quantidade de mesas alterada para "+q+".")}function ugLiberarMesaVazia(i){
+ m.status="OCUPADA";if(!m.abertura)m.abertura=new Date().toISOString();if(!m.pessoas)m.pessoas=1;if(!m.pedido_numero)m.pedido_numero="M-"+String(m.numero)+"-"+Date.now().toString().slice(-5);localStorage.setItem("cb_hom_tipo_venda","MESA");localStorage.setItem("cb_hom_mesa_pdv",String(m.numero));salvar();document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("sel"));let b=document.querySelector('.nav button[data-v="PDV"]');if(b)b.classList.add("sel");document.querySelectorAll("main section").forEach(x=>x.classList.add("hide"));document.getElementById("PDV").classList.remove("hide");renderPdv();document.getElementById("pdvBusca")?.focus()}function alterarQuantidadeMesas(){let q=Math.floor(Number(document.getElementById("mesaQuantidade").value||0));if(q<1||q>500)return alert("Informe uma quantidade entre 1 e 500 mesas.");let atuais=mesas.length;if(q===atuais)return alert("A quantidade já é "+q+".");if(q<atuais){let removidas=mesas.filter(m=>Number(m.numero)>q),ativas=removidas.filter(m=>m.status!=="LIVRE");if(ativas.length&&!confirm("Existem "+ativas.length+" mesa(s) ocupada(s) ou fechada(s) acima da nova quantidade. Deseja remover mesmo assim?"))return;mesas=mesas.filter(m=>Number(m.numero)<=q)}else{for(let n=atuais+1;n<=q;n++)mesas.push({numero:n,status:"LIVRE"})}localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));salvar();alert("Quantidade de mesas alterada para "+q+".")}async function ugLiberarMesaVazia(i){
  const m=mesas[i];if(!m)return;
  if(Array.isArray(m.itens)&&m.itens.length)return alert("Esta mesa possui produtos. Finalize ou cancele o pedido antes de liberá-la.");
  if(!confirm("Liberar a mesa "+m.numero+" sem produtos?"))return;
- const active=localStorage.getItem("cb_hom_tipo_venda")==="MESA"&&String(localStorage.getItem("cb_hom_mesa_pdv"))===String(m.numero);
+ const numero=String(m.numero),tenant=String(window.__cbRestaurante?.id||"");
+ if(!tenant||!navigator.onLine)return alert("É necessário estar conectado ao servidor para liberar a mesa.");
+ const active=localStorage.getItem("cb_hom_tipo_venda")==="MESA"&&String(localStorage.getItem("cb_hom_mesa_pdv"))===numero;
  if(active&&pdv.length)return alert("Há produtos no carrinho desta mesa. Finalize ou cancele antes de liberar.");
- if(active){pdv=[];localStorage.removeItem("cb_hom_mesa_pdv");localStorage.setItem("cb_hom_tipo_venda","BALCÃO")}
- m.status="LIVRE";m.itens=[];m.total=0;m.cliente="";m.abertura=null;m.pedido_numero=null;m.fechada_em=new Date().toISOString();
- salvar();ugAgendarMesasSync();
+ try{
+  let committed=null;
+  for(let attempt=0;attempt<4;attempt++){
+   const read=await fetch('./licenca/api.php?action=tables_sync',{credentials:'same-origin',cache:'no-store'});
+   const data=await read.json();
+   if(!read.ok||!data.ok||!data.disponivel)throw Error(data.erro||'Mesas ainda não disponíveis no servidor');
+   if(String(window.__cbRestaurante?.id)!==tenant)throw Error('A empresa mudou durante a operação');
+   const rows=ugMesasNormalizar(data.mesas),target=rows.find(x=>String(x.numero)===numero);
+   if(!target)throw Error('Mesa não encontrada no servidor');
+   if(target.itens.length)throw Error('O servidor informa produtos nesta mesa. Não é seguro liberá-la.');
+   target.status='LIVRE';target.itens=[];target.total=0;target.cliente='';target.abertura=null;target.pedido_numero=null;target.fechada_em=new Date().toISOString();
+   const write=await fetch('./licenca/api.php?action=tables_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:Number(data.revision||0),mesas:rows})});
+   const result=await write.json();
+   if(write.status===409)continue;
+   if(!write.ok||!result.ok)throw Error(result.erro||'HTTP '+write.status);
+   committed={rows:ugMesasNormalizar(result.mesas||rows),revision:Number(result.revision)};
+   break;
+  }
+  if(!committed)throw Error('Outra estação alterou as mesas simultaneamente. Tente novamente.');
+  ugMesasTenant=tenant;ugMesasBase=structuredClone(committed.rows);ugMesasRevision=committed.revision;
+  if(active){pdv=[];localStorage.removeItem("cb_hom_mesa_pdv");localStorage.setItem("cb_hom_tipo_venda","BALCÃO")}
+  ugMesasAplicarRemoto(committed.rows);
+  alert("Mesa "+numero+" liberada e confirmada no servidor.");
+ }catch(e){alert("Não foi possível liberar a mesa no servidor: "+e.message);ugAgendarMesasSync()}
 }
 function renderMesas(){let e=document.getElementById("mesasLista");if(!e)return;let q=document.getElementById("mesaQuantidade");if(q)q.value=mesas.length;e.innerHTML=mesas.map((m,i)=>'<div style="display:inline-flex;flex-direction:column;gap:4px;margin:4px"><button class="mesa '+(m.status==="LIVRE"?"livre":m.status==="OCUPADA"?"ocupada":"fechada")+'" onclick="abrirPedidoMesa('+i+')">MESA '+String(m.numero).padStart(2,"0")+'<br>'+m.status+'</button>'+(m.status==="OCUPADA"&&(!Array.isArray(m.itens)||!m.itens.length)?'<button type="button" onclick="ugLiberarMesaVazia('+i+')" style="padding:5px;border-radius:5px;background:#eee;color:#222">Liberar vazia</button>':'')+'</div>').join("")}function acaoMesa(i){let m=mesas[i];if(m.status==="LIVRE"){if(confirm("Abrir a Mesa "+m.numero+"?")){m.status="OCUPADA";m.abertura=new Date().toISOString();m.pessoas=1;m.pedido_numero="M-"+String(m.numero)+"-"+Date.now().toString().slice(-5);}}else if(m.status==="OCUPADA"){if(confirm("Fechar a Mesa "+m.numero+"?"))m.status="FECHADA"}else{if(confirm("Liberar a Mesa "+m.numero+"?"))m.status="LIVRE"}salvar()}function inicializarComandas(){
  let q=Number(localStorage.getItem("cb_hom_comanda_quantidade")||comandas.length||10);
