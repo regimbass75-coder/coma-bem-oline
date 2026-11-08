@@ -917,6 +917,7 @@ Imprimir fechamento automaticamente ao fechar o caixa
 </div>
 <div id="relConteudo"></div>
 </section></main><div id="buscaPrecoModal" class="modalBusca hide"><div class="modalBuscaBox"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><h2 style="margin:0">Busca Preço</h2><p class="muted">Pesquise por nome, código ou código de barras.</p></div><button class="btn red" onclick="fecharBuscaPreco()">FECHAR</button></div><input id="buscaPrecoAuto" class="inp" autocomplete="off" placeholder="Comece a digitar o produto..." oninput="renderAutoBuscaPreco()"><div id="buscaPrecoResultados" style="margin-top:10px"></div></div></div><script>
+let ugCozinhaSyncBusy=false,ugCozinhaSyncPending=false,ugCozinhaSyncTimer=null;
 // Estado compartilhado inicializado antes de qualquer callback de renderização.
 let ugCaixaRevision=0,ugCaixaBusy=false;
 let ugClientesEmGravacao=0,ugClientesConsultaSeq=0;
@@ -1131,9 +1132,9 @@ setInterval(ugCmdSync,3500);
 function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,650)}
 window.ugAgendarMesasSync=ugAgendarMesasSync;
 setInterval(ugPublicarMesas,3500);
-async // Cozinha compartilhada: guarda os pedidos locais e une pelo ID com o servidor.
+// Cozinha compartilhada: guarda os pedidos locais e une pelo ID com o servidor.
 // Não apaga registros locais durante a migração de computadores antigos.
-let ugCozinhaSyncBusy=false,ugCozinhaSyncPending=false,ugCozinhaSyncTimer=null;
+
 function ugSalvarCozinhaLocal(pedidos){
  localStorage.setItem('cb_hom_cozinha',JSON.stringify(pedidos));
  ugAgendarCozinhaSync();
