@@ -947,6 +947,11 @@ function salvarInterno(){
  try{
   const kind=localStorage.getItem('cb_hom_tipo_venda');
   const number=localStorage.getItem('cb_hom_mesa_pdv');
+  if(kind==='COMANDA'){
+   const selected=localStorage.getItem('cb_hom_comanda_pdv');
+   const c=comandas.find(x=>String(x.numero)===String(selected));
+   if(c){c.itens=pdv.map(x=>({...x}));c.total=c.itens.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0);c.status=c.itens.length?'ABERTA':'LIVRE';if(!c.itens.length){c.abertura=null;c.pedido_numero=null}}
+  }
   if(kind==='MESA'&&number){
    const table=mesas.find(m=>String(m.numero)===String(number));
    if(table){table.itens=pdv.map(x=>({...x}));table.total=table.itens.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0);if(table.itens.length){table.status="OCUPADA";if(!table.abertura)table.abertura=new Date().toISOString()}else{table.status="LIVRE";table.abertura=null;table.pedido_numero=null}}
@@ -1052,6 +1057,72 @@ async function ugPublicarMesas(){
  }catch(e){console.warn('Sincronização das mesas:',e.message)}
  finally{ugMesasBusy=false}
 }
+let ugCmdBase=null,ugCmdTenant=null,ugCmdBusy=false,ugCmdTimer=null;
+function ugCmdSyncSchedule(){clearTimeout(ugCmdTimer);ugCmdTimer=setTimeout(ugCmdSync,700)}
+async function ugCmdSync(){
+ if(ugCmdBusy||!navigator.onLine||!window.__cbUsuarioLogado||!window.__cbRestaurante?.id)return;
+ ugCmdBusy=true;
+ const tenant=String(window.__cbRestaurante.id);
+ try{
+  const response=await fetch('./licenca/api.php?action=commands_sync',{credentials:'same-origin',cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok||!data.ok||!Array.isArray(data.comandas))throw Error(data.erro||'Comandas indisponíveis');
+  if(String(window.__cbRestaurante?.id)!==tenant)return;
+  if(ugCmdTenant!==tenant){ugCmdTenant=tenant;ugCmdBase=null}
+  const remote=data.comandas,revision=Number(data.revision||0);
+  if(ugCmdBase===null){
+   if(!data.disponivel){
+    ugCmdBase=[]; // Initialize server with existing local records.
+   }else{
+    const localBy=new Map(comandas.map(c=>[String(c.numero),c]));
+    ugCmdBase=structuredClone(remote);
+    // Keep pending local orders only when the server has no corresponding items.
+    comandas=remote.map(c=>{
+     const local=localBy.get(String(c.numero));
+     return !c.itens?.length&&local?.itens?.length?{...c,itens:local.itens,total:local.total,status:'ABERTA'}:c;
+    });
+    localStorage.setItem('cb_hom_cmd',ugMesasJson(comandas));
+    renderCmd();
+    if(ugMesasJson(comandas)!==ugMesasJson(remote))ugCmdSyncSchedule();
+    return;
+   }
+  }
+  const base=new Map(ugCmdBase.map(c=>[String(c.numero),c]));
+  const local=new Map(comandas.map(c=>[String(c.numero),c]));
+  const server=new Map(remote.map(c=>[String(c.numero),c]));
+  const changed=[...new Set([...base.keys(),...local.keys()])].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(local.get(k)));
+  if(!changed.length){
+   if(ugMesasJson(comandas)!==ugMesasJson(remote)){
+    comandas=structuredClone(remote);
+    localStorage.setItem('cb_hom_cmd',ugMesasJson(comandas));
+    const active=localStorage.getItem('cb_hom_tipo_venda')==='COMANDA'?localStorage.getItem('cb_hom_comanda_pdv'):null;
+    if(active){const selected=comandas.find(c=>String(c.numero)===String(active));if(selected){pdv=(selected.itens||[]).map(x=>({...x}));localStorage.setItem('cb_hom_pdv',ugMesasJson(pdv));renderPdv()}}
+    renderCmd();
+   }
+   ugCmdBase=structuredClone(remote);
+   return;
+  }
+  const conflicts=changed.filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(server.get(k)));
+  if(conflicts.length){
+   try{localStorage.setItem('ug_comandas_conflito_backup_'+tenant,ugMesasJson(comandas))}catch(e){}
+   const merged=new Map(local);
+   for(const k of conflicts){if(server.has(k))merged.set(k,server.get(k));else merged.delete(k)}
+   comandas=[...merged.values()].sort((a,b)=>Number(a.numero)-Number(b.numero));
+   localStorage.setItem('cb_hom_cmd',ugMesasJson(comandas));renderCmd();
+   ugCmdBase=structuredClone(remote);return;
+  }
+  const merged=new Map(server);
+  for(const k of changed){if(local.has(k))merged.set(k,local.get(k));else merged.delete(k)}
+  const next=[...merged.values()].sort((a,b)=>Number(a.numero)-Number(b.numero));
+  const write=await fetch('./licenca/api.php?action=commands_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision,comandas:next})});
+  const result=await write.json();
+  if(write.status===409)return;
+  if(!write.ok||!result.ok)throw Error(result.erro||'Falha ao salvar comandas');
+  ugCmdBase=structuredClone(next);
+ }catch(e){console.warn('Sincronização de comandas:',e.message)}
+ finally{ugCmdBusy=false}
+}
+setInterval(ugCmdSync,3500);
 function ugAgendarMesasSync(){clearTimeout(ugMesasSyncTimer);ugMesasSyncTimer=setTimeout(ugPublicarMesas,650)}
 window.ugAgendarMesasSync=ugAgendarMesasSync;
 setInterval(ugPublicarMesas,3500);
@@ -1742,6 +1813,9 @@ function alterarQuantidadeComandas(){
  salvar();renderCmd();alert("Quantidade de comandas alterada para "+q+".");
 }
 function abrirComanda(numero){
+ const prev=localStorage.getItem('cb_hom_tipo_venda')==='COMANDA'?localStorage.getItem('cb_hom_comanda_pdv'):null;
+ if(prev){const old=comandas.find(c=>String(c.numero)===String(prev));if(old){old.itens=pdv.map(x=>({...x}));old.total=old.itens.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0);old.status=old.itens.length?'ABERTA':'LIVRE'}}
+
  let c=comandas.find(x=>Number(x.numero)===Number(numero));
  if(!c)return;
  if(c.status==="ABERTA"||c.status==="OCUPADA"){
@@ -1755,6 +1829,7 @@ function abrirComanda(numero){
  localStorage.setItem("cb_hom_tipo_venda","COMANDA");
  localStorage.setItem("cb_hom_comanda_pdv",String(c.numero));
  localStorage.setItem("cb_hom_comanda_selecionada",String(c.numero));
+ pdv=(c.itens||[]).map(x=>({...x}));
  salvar();renderCmd();renderPdv();abrirTela("PDV");
  setTimeout(()=>document.getElementById("pdvBusca")?.focus(),80);
 }
