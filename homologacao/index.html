@@ -977,7 +977,19 @@ async function ugPublicarMesas(){
     if(ugMesasJson(mesas)!==ugMesasJson(remote)&&mesas.length){
      try{localStorage.setItem('ug_mesas_backup_pre_sync_'+tenant,ugMesasJson(mesas))}catch(e){console.warn('Backup de mesas:',e)}
     }
-    ugMesasBase=structuredClone(remote);ugMesasRevision=rev;ugMesasAplicarRemoto(remote);return;
+    ugMesasBase=structuredClone(remote);ugMesasRevision=rev;
+    // Legacy server records had only number/status. Preserve existing local orders
+    // for tables that have no server-side order, then publish them with revision control.
+    const localByNumber=new Map(mesas.map(x=>[String(x.numero),x]));
+    const recovered=remote.map(x=>{
+     const local=localByNumber.get(String(x.numero));
+     return (!Array.isArray(x.itens)||!x.itens.length)&&Array.isArray(local?.itens)&&local.itens.length
+      ? {...x,itens:local.itens.map(p=>({...p})),total:local.total||0,cliente:local.cliente||x.cliente||'',pessoas:local.pessoas||x.pessoas||1}
+      : x;
+    });
+    ugMesasAplicarRemoto(recovered);
+    if(ugMesasJson(recovered)!==ugMesasJson(remote))ugAgendarMesasSync();
+    return;
    }
    ugMesasBase=[];ugMesasRevision=rev;
   }
