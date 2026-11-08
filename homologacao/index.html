@@ -1195,8 +1195,9 @@ async function ugReceberPedidosMesa(){
 setInterval(ugReceberPedidosMesa,12000);
 window.addEventListener('online',()=>setTimeout(ugReceberPedidosMesa,2500));
 
-function salvar(){ salvarInterno(); enfileirarSnapshotSincronizacao(); ugAgendarMesasSync(); }
+function salvar(){ salvarInterno(); enfileirarSnapshotSincronizacao(); ugAgendarMesasSync(); ugCmdSyncSchedule(); }
 window.addEventListener('online',ugAgendarMesasSync);
+window.addEventListener('online',ugCmdSyncSchedule);
 window.addEventListener('load',()=>setTimeout(ugAgendarMesasSync,4500));
 
 async function ugEnviarPrecoEmpresa(nome,preco){
@@ -1834,6 +1835,8 @@ function abrirComanda(numero){
  setTimeout(()=>document.getElementById("pdvBusca")?.focus(),80);
 }
 function selecionarComanda(i){
+ const previous=localStorage.getItem('cb_hom_tipo_venda')==='COMANDA'?localStorage.getItem('cb_hom_comanda_pdv'):null;
+ if(previous){const old=comandas.find(x=>String(x.numero)===String(previous));if(old){old.itens=pdv.map(x=>({...x}));old.total=old.itens.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0);old.status=old.itens.length?'ABERTA':'LIVRE'}}
  const c=comandas[i];
  if(!c||c.status==="FECHADA")return;
  c.status="ABERTA";
