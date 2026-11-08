@@ -957,9 +957,22 @@ const ugMesasJson=x=>JSON.stringify(x||[]);
 const ugMesasNormalizar=rows=>(rows||[]).map(x=>{const m={...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]};if(m.status==="OCUPADA"&&!m.itens.length&&!(Number(m.total)>0)){m.status="LIVRE";m.abertura=null;m.pedido_numero=null}return m});
 function ugMesasAplicarRemoto(rows){
  const active=localStorage.getItem('cb_hom_tipo_venda')==='MESA'?localStorage.getItem('cb_hom_mesa_pdv'):null;
- mesas=rows.map(x=>({...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]}));
+ const localActive=active?mesas.find(x=>String(x.numero)===String(active)):null;
+ const baseActive=active?ugMesasBase?.find(x=>String(x.numero)===String(active)):null;
+ const pendingActive=!!active&&!!localActive&&!!baseActive&&ugMesasJson(localActive)!==ugMesasJson(baseActive);
+ const draft=active&&pdv.length?pdv.map(x=>({...x})):null;
+ mesas=ugMesasNormalizar(rows);
+ if(active){
+  const selected=mesas.find(x=>String(x.numero)===String(active));
+  if(selected){
+   if(pendingActive&&draft){
+    // A remote poll must not erase an unsaved local item while the user is ordering.
+    selected.itens=draft;selected.total=draft.reduce((v,x)=>v+Number(x.preco||0)*Number(x.qtd||0),0);selected.status="OCUPADA";
+  }else pdv=selected.itens.map(x=>({...x}));
+  }
+  localStorage.setItem('cb_hom_pdv',ugMesasJson(pdv));
+ }
  localStorage.setItem('cb_hom_mesas',ugMesasJson(mesas));
- if(active){const selected=mesas.find(x=>String(x.numero)===String(active));if(selected)pdv=selected.itens.map(x=>({...x}));localStorage.setItem('cb_hom_pdv',ugMesasJson(pdv))}
  renderMesas();renderPdv();
 }
 async function ugPublicarMesas(){
