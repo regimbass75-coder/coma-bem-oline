@@ -954,6 +954,7 @@ function salvarInterno(){
  }catch(e){console.warn('Falha ao guardar carrinho da mesa',e)}
  localStorage.setItem("cb_hom_config",JSON.stringify(config));localStorage.setItem("cb_hom_usuarios",JSON.stringify(usuarios));localStorage.setItem("cb_hom_contas",JSON.stringify(contas));localStorage.setItem("cb_hom_garcom",JSON.stringify(garPedido));localStorage.setItem("cb_hom_clientes",JSON.stringify(clientes));localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));localStorage.setItem("cb_hom_fila",JSON.stringify(fila));localStorage.setItem("cb_hom_estoque",JSON.stringify(estoque));localStorage.setItem("cb_hom_pdv",JSON.stringify(pdv));localStorage.setItem("cb_hom_vendas",JSON.stringify(vendas));localStorage.setItem("cb_hom_cmd",JSON.stringify(comandas));localStorage.setItem("cb_hom_del",JSON.stringify(deliveries));localStorage.setItem("cb_hom_caixa",JSON.stringify(caixa));renderCmd();renderDel();renderCaixa();renderPdv();renderEstoque();renderFinanceiro();renderHistorico();renderRelatorios();renderClientes();renderMesas();renderGarcom();renderKds();renderContas();renderUsuarios();renderProprietario();renderComissoes();renderNet()}let pdvSelecionadoNome="";window.usuarios=usuarios;let ugMesasSyncTimer=null,ugMesasRevision=null,ugMesasBase=null,ugMesasBusy=false,ugMesasTenant=null;
 const ugMesasJson=x=>JSON.stringify(x||[]);
+const ugMesasNormalizar=rows=>(rows||[]).map(x=>({...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]}));
 function ugMesasAplicarRemoto(rows){
  const active=localStorage.getItem('cb_hom_tipo_venda')==='MESA'?localStorage.getItem('cb_hom_mesa_pdv'):null;
  mesas=rows.map(x=>({...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]}));
@@ -970,7 +971,7 @@ async function ugPublicarMesas(){
   const server=await response.json();
   if(!response.ok||!server.ok||!Array.isArray(server.mesas))throw Error(server.erro||'Não foi possível consultar mesas');
   if(String(window.__cbRestaurante?.id)!==tenant)return;
-  const remote=server.mesas,rev=Number(server.revision||0);
+  const remote=ugMesasNormalizar(server.mesas),rev=Number(server.revision||0);
   if(ugMesasTenant!==tenant){ugMesasTenant=tenant;ugMesasRevision=null;ugMesasBase=null}
   if(ugMesasBase===null){
    if(server.disponivel){
@@ -999,7 +1000,17 @@ async function ugPublicarMesas(){
   if(!changed.size){ugMesasBase=structuredClone(remote);ugMesasRevision=rev;if(ugMesasJson(mesas)!==ugMesasJson(remote))ugMesasAplicarRemoto(remote);return}
   const serverMap=new Map(remote.map(x=>[String(x.numero),x]));
   const conflicts=[...changed].filter(k=>ugMesasJson(base.get(k))!==ugMesasJson(serverMap.get(k)));
-  if(conflicts.length){console.warn('Conflito de mesas',conflicts);return}
+  if(conflicts.length){
+   // A paid/closed table must never be resurrected by a stale cart on another PC.
+   // Refresh conflicted tables from the authoritative server, retaining a local backup.
+   try{localStorage.setItem('ug_mesas_conflito_backup_'+tenant,ugMesasJson(mesas))}catch(e){}
+   const reconciled=new Map(current);
+   for(const k of conflicts){if(serverMap.has(k))reconciled.set(k,serverMap.get(k));else reconciled.delete(k)}
+   ugMesasBase=ugMesasNormalizar(remote);ugMesasRevision=rev;
+   ugMesasAplicarRemoto([...reconciled.values()].sort((a,b)=>Number(a.numero)-Number(b.numero)));
+   console.warn('Mesas atualizadas no outro computador; conflito resolvido pelo servidor:',conflicts);
+   return;
+  }
   const merged=new Map(serverMap);
   for(const k of changed){if(current.has(k))merged.set(k,current.get(k));else merged.delete(k)}
   const next=[...merged.values()].sort((x,y)=>Number(x.numero)-Number(y.numero));
@@ -1471,7 +1482,7 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  }
  if(tipoVenda==="MESA"&&mesaVenda){
    let m=mesas.find(x=>String(x.id)===String(mesaVenda)||String(x.numero)===String(mesaVenda));
-   if(m){m.status="LIVRE";m.itens=[];m.total=0;m.cliente="";m.fechada_em=new Date().toISOString();}
+   if(m){m.status="LIVRE";m.itens=[];m.total=0;m.cliente="";m.abertura=null;m.pedido_numero=null;m.fechada_em=new Date().toISOString();}
    localStorage.removeItem("cb_hom_mesa_pdv");
    localStorage.setItem("cb_hom_tipo_venda","BALCÃO");
    if(typeof renderMesas==="function")renderMesas();
