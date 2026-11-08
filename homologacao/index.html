@@ -953,7 +953,13 @@ function salvarInterno(){
   }
  }catch(e){console.warn('Falha ao guardar carrinho da mesa',e)}
  localStorage.setItem("cb_hom_config",JSON.stringify(config));localStorage.setItem("cb_hom_usuarios",JSON.stringify(usuarios));localStorage.setItem("cb_hom_contas",JSON.stringify(contas));localStorage.setItem("cb_hom_garcom",JSON.stringify(garPedido));localStorage.setItem("cb_hom_clientes",JSON.stringify(clientes));localStorage.setItem("cb_hom_mesas",JSON.stringify(mesas));localStorage.setItem("cb_hom_fila",JSON.stringify(fila));localStorage.setItem("cb_hom_estoque",JSON.stringify(estoque));localStorage.setItem("cb_hom_pdv",JSON.stringify(pdv));localStorage.setItem("cb_hom_vendas",JSON.stringify(vendas));localStorage.setItem("cb_hom_cmd",JSON.stringify(comandas));localStorage.setItem("cb_hom_del",JSON.stringify(deliveries));localStorage.setItem("cb_hom_caixa",JSON.stringify(caixa));renderCmd();renderDel();renderCaixa();renderPdv();renderEstoque();renderFinanceiro();renderHistorico();renderRelatorios();renderClientes();renderMesas();renderGarcom();renderKds();renderContas();renderUsuarios();renderProprietario();renderComissoes();renderNet()}let pdvSelecionadoNome="";window.usuarios=usuarios;let ugMesasSyncTimer=null,ugMesasRevision=null,ugMesasBase=null,ugMesasBusy=false,ugMesasTenant=null;
-const ugMesasJson=x=>JSON.stringify(x||[]);
+// Canonical comparison: PostgreSQL JSONB reorders object keys on every round trip.
+const ugMesasJson=x=>JSON.stringify(x||[],function(k,v){
+ if(v&&typeof v==='object'&&!Array.isArray(v)){
+  return Object.fromEntries(Object.keys(v).sort().map(key=>[key,v[key]]));
+ }
+ return v;
+});
 const ugMesasNormalizar=rows=>(rows||[]).map(x=>{const m={...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]};if(m.status==="OCUPADA"&&!m.itens.length&&!(Number(m.total)>0)){m.status="LIVRE";m.abertura=null;m.pedido_numero=null}return m});
 function ugMesasAplicarRemoto(rows){
  const active=localStorage.getItem('cb_hom_tipo_venda')==='MESA'?localStorage.getItem('cb_hom_mesa_pdv'):null;
