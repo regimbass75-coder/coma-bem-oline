@@ -174,7 +174,7 @@ def homolog_master_bridge():
     from urllib.error import HTTPError, URLError
     from flask import make_response
     action = (request.args.get('action') or '').strip().lower()
-    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'returns_list', 'returns_request', 'returns_approve', 'returns_balance', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'cash_state', 'kitchen_sync', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync', 'table_orders'):
+    if action not in ('', 'login', 'me', 'logout', 'users_list', 'users_create', 'users_update', 'sales_list', 'sales_create', 'returns_list', 'returns_request', 'returns_approve', 'returns_balance', 'orders_list', 'orders_upsert', 'orders_complete', 'orders_cancel', 'company_backup', 'stock_catalog', 'stock_price', 'company_preferences', 'cash_state', 'kitchen_sync', 'customers_list', 'customers_save', 'customers_delete', 'credit_receipts_list', 'credit_receipt_pay', 'authorize', 'authorize_password', 'daf_list', 'daf_create', 'daf_complete', 'tables_sync', 'commands_sync', 'table_orders'):
         return jsonify({'ok': False, 'erro': 'Operação não permitida.'}), 400
     if action == 'table_orders':
         from urllib.request import Request, urlopen
@@ -236,6 +236,52 @@ def homolog_master_bridge():
         except Exception:
             app.logger.exception('Falha em pedidos de mesa')
             return jsonify({'ok':False,'erro':'Pedidos de mesa indisponíveis.'}),503
+    if action == 'commands_sync':
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+        cookie = request.cookies.get('UG_GESTOR_SESSION', '')
+        if not cookie:
+            return jsonify({'ok': False, 'erro': 'Sessão necessária.'}), 401
+        try:
+            req = Request('https://unigestor-master-teste.onrender.com/licenca/api.php?action=me',
+                          headers={'Cookie': 'COMABEM_APP=' + cookie, 'Accept': 'application/json'})
+            with urlopen(req, timeout=15) as upstream:
+                identity = json.loads(upstream.read(262144))
+        except (HTTPError, URLError, TimeoutError, ValueError):
+            return jsonify({'ok': False, 'erro': 'Não foi possível validar a sessão.'}), 401
+        if not identity.get('ok'):
+            return jsonify({'ok': False, 'erro': 'Sessão inválida.'}), 401
+        company = str((identity.get('restaurant') or {}).get('id') or '')
+        modules = (identity.get('modules') or {}).get('effective_modules') or []
+        if not company or not isinstance(modules, list) or not any(x in modules for x in ('Mesas', 'Garçom Mobile', 'PDV/Vendas', 'Configurações')):
+            return jsonify({'ok': False, 'erro': 'Sem permissão de comandas.'}), 403
+        payload = request.get_json(silent=True) or {} if request.method == 'POST' else {}
+        if request.method == 'POST':
+            rows = payload.get('comandas')
+            if not isinstance(rows, list) or len(rows) > 500:
+                return jsonify({'ok': False, 'erro': 'Comandas inválidas.'}), 400
+            seen = set()
+            for c in rows:
+                if not isinstance(c, dict) or type(c.get('numero')) is not int or not 1 <= c['numero'] <= 500 or c['numero'] in seen or c.get('status') not in ('LIVRE', 'ABERTA', 'OCUPADA', 'FECHADA') or not isinstance(c.get('itens', []), list) or len(c.get('itens', [])) > 300:
+                    return jsonify({'ok': False, 'erro': 'Dados de comanda inválidos.'}), 400
+                seen.add(c['numero'])
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute('CREATE TABLE IF NOT EXISTS ug_comandas_sync (restaurant_id TEXT PRIMARY KEY, comandas JSONB NOT NULL, revision BIGINT NOT NULL DEFAULT 0)')
+                    cur.execute('SELECT comandas, revision FROM ug_comandas_sync WHERE restaurant_id=%s FOR UPDATE', (company,))
+                    row = cur.fetchone()
+                    if request.method == 'POST':
+                        revision = int(payload.get('revision', 0))
+                        if revision != (row[1] if row else 0):
+                            return jsonify({'ok': False, 'erro': 'Comandas alteradas em outra estação.', 'revision': row[1] if row else 0, 'comandas': row[0] if row else []}), 409
+                        cur.execute('INSERT INTO ug_comandas_sync(restaurant_id,comandas,revision) VALUES(%s,%s::jsonb,1) ON CONFLICT(restaurant_id) DO UPDATE SET comandas=EXCLUDED.comandas,revision=ug_comandas_sync.revision+1 RETURNING revision', (company, json.dumps(rows)))
+                        new_rev = cur.fetchone()[0]
+                        return jsonify({'ok': True, 'disponivel': True, 'comandas': rows, 'revision': new_rev})
+                    return jsonify({'ok': True, 'disponivel': bool(row), 'comandas': row[0] if row else [], 'revision': row[1] if row else 0})
+        except Exception:
+            app.logger.exception('Falha na sincronização de comandas')
+            return jsonify({'ok': False, 'erro': 'Armazenamento de comandas indisponível.'}), 503
     if action == 'tables_sync':
         from urllib.request import Request, urlopen
         from urllib.error import HTTPError, URLError
