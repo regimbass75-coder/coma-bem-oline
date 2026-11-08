@@ -152,13 +152,44 @@
    return false;
   }
   const snapshot={};for(const k of keys){const v=localStorage.getItem(k);if(v!==null)snapshot[k]=v;}
-  localStorage.setItem(slot(owner),JSON.stringify(snapshot));
+  // Large tenant snapshots may exceed the small localStorage quota.
+  // Keep a durable copy in IndexedDB before clearing any active tenant data.
+  const tenantDb=()=>new Promise((resolve,reject)=>{
+   const req=indexedDB.open('ug_tenant_snapshots_v3',1);
+   req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('snapshots'))req.result.createObjectStore('snapshots')};
+   req.onsuccess=()=>resolve(req.result);
+   req.onerror=()=>reject(req.error||new Error('Falha ao abrir armazenamento das empresas'));
+  });
+  const db=await tenantDb();
+  const storeSnapshot=(key,value)=>new Promise((resolve,reject)=>{
+   const tx=db.transaction('snapshots','readwrite');
+   tx.objectStore('snapshots').put(value,key);
+   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+  });
+  const readSnapshot=key=>new Promise((resolve,reject)=>{
+   const tx=db.transaction('snapshots','readonly');
+   const req=tx.objectStore('snapshots').get(key);
+   req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  });
+  try{
+   await storeSnapshot(owner,snapshot);
+   const previous=await readSnapshot(id);
+   let next=previous||JSON.parse(localStorage.getItem(slot(id))||'{}');
+   if(!next||typeof next!=='object'||Array.isArray(next))throw Error('Snapshot da empresa inválido.');
+   // Existing snapshots remain readable; no data is removed before the backup succeeds.
+   for(const k of keys)localStorage.removeItem(k);
+   for(const k of keys)if(typeof next[k]==='string')localStorage.setItem(k,next[k]);
+   localStorage.setItem(OWNER,id);
+   location.reload();return true;
+  }finally{db.close()}
+  /* legacy switch:
   const next=JSON.parse(localStorage.getItem(slot(id))||'{}');
   if(!next||typeof next!=='object'||Array.isArray(next))throw Error('Snapshot da empresa inválido.');
   for(const k of keys)localStorage.removeItem(k);
   for(const k of keys)if(typeof next[k]==='string')localStorage.setItem(k,next[k]);
   localStorage.setItem(OWNER,id);
   location.reload();return true;
+  */
  };
  window.ugTenantRecoveryAvailable=true;
 })();
