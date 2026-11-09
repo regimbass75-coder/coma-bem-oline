@@ -97,6 +97,43 @@ async function abrirMesaMobile(box,m,voltar){
  const customer=document.createElement('input');customer.placeholder='Nome do cliente / responsável';customer.maxLength=100;customer.value=m.cliente||'';
  const people=document.createElement('input');people.type='number';people.min='1';people.max='100';people.value=String(m.pessoas||1);
  const note=document.createElement('textarea');note.rows=3;note.maxLength=500;note.placeholder='Observações para a cozinha';
+ const orderPanel=document.createElement('section');orderPanel.className='panel';orderPanel.style.cssText='margin:8px 0;padding:12px';
+ const orderHeading=document.createElement('strong');orderHeading.textContent='Pedidos da mesa';
+ const orderList=document.createElement('div');orderPanel.append(orderHeading,orderList);
+ const readyNotice=document.createElement('p');readyNotice.setAttribute('role','alert');readyNotice.style.cssText='font-weight:bold;color:#087c43';
+ const seenReady=new Set();let firstOrderCheck=true,checkingOrders=false;
+ const moneyOrder=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
+ async function refreshTableOrders(){
+  if(checkingOrders||!root.isConnected||document.hidden)return;
+  checkingOrders=true;
+  try{
+   const [tableData,kitchenData]=await Promise.all([call('table_orders'),call('kitchen_sync')]);
+   if(!root.isConnected)return;
+   const kitchen=new Map((kitchenData.pedidos||[]).filter(x=>x&&x.id).map(x=>[String(x.id),x]));
+   const orders=(tableData.pedidos||[]).filter(x=>Number(x.mesa)===Number(m.numero));
+   orderList.replaceChildren();
+   if(!orders.length)orderList.textContent='Nenhum pedido registrado nesta mesa.';
+   for(const order of orders){
+    const status=String(kitchen.get(String(order.id))?.status||order.status||'ENVIADO');
+    const card=document.createElement('div');card.style.cssText='padding:8px 0;border-bottom:1px solid #ddd';
+    const heading=document.createElement('strong');
+    heading.textContent='Pedido '+order.id+' • '+(status==='ENVIADO'?'Aguardando preparo':status==='EM PREPARO'?'Em preparo':status==='PRONTO'?'Pronto':status);
+    card.append(heading);
+    for(const item of order.itens||[]){
+     const row=document.createElement('div');row.textContent=Number(item.qtd||0)+'× '+String(item.nome||'Produto')+' — '+moneyOrder(Number(item.qtd||0)*Number(item.preco||0));card.append(row);
+    }
+    orderList.append(card);
+    if(status==='PRONTO'&&!seenReady.has(String(order.id))){
+     seenReady.add(String(order.id));
+     if(!firstOrderCheck){readyNotice.textContent='Mesa '+String(m.numero).padStart(2,'0')+' — Pedido pronto!';}
+    }
+   }
+   firstOrderCheck=false;
+  }catch(e){orderList.textContent='Não foi possível atualizar o preparo: '+e.message}
+  finally{checkingOrders=false}
+ }
+ const orderTimer=setInterval(()=>{if(!root.isConnected){clearInterval(orderTimer);return}refreshTableOrders()},5000);
+ refreshTableOrders();
  const msg=document.createElement('p');msg.className='hint';msg.setAttribute('role','status');
  const button=(label,fn,cls='')=>{const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=fn;return b};
  const count=()=>[...cart.values()].reduce((n,x)=>n+x.qtd,0);
@@ -112,6 +149,7 @@ async function abrirMesaMobile(box,m,voltar){
   const sub=document.createElement('small');sub.textContent=screen==='groups'?'Escolha a categoria':screen==='products'?group:screen==='review'?'Conferir pedido':'Dados da mesa';
   title.append(h,sub);top.append(title);
   top.append(button('⋮',()=>{const menu=document.createElement('div');menu.className='waiter-popup';menu.append(button('Adicionar produtos',()=>go('groups')),button('Dados da mesa',()=>go('details')));const disabled=button('Fechar pedido (em preparação)',()=>{});disabled.disabled=true;const reprint=button('Reimprimir (em preparação)',()=>{});reprint.disabled=true;menu.append(disabled,reprint);head.querySelector('.waiter-popup')?.remove();head.append(menu)},'waiter-more'));head.append(top);
+  content.append(readyNotice,orderPanel);
   if(screen==='groups'){
    if(lastSuccess){const ok=document.createElement('p');ok.className='waiter-success';ok.textContent=lastSuccess;content.append(ok)}
    const search=document.createElement('input');search.type='search';search.placeholder='Buscar produto em todos os grupos';search.className='waiter-search';content.append(search);
