@@ -61,7 +61,7 @@ function monitorVendas(box){
 async function openModule(id,title,desc){stopSalesMonitor();el('moduleTitle').textContent=title;el('moduleDescription').textContent=desc;el('dashboard').hidden=true;el('moduleView').hidden=false;window.scrollTo({top:0,behavior:'instant'});const box=el('moduleContent');box.replaceChildren();const status=document.createElement('p');status.className='hint';status.textContent='Carregando informações da empresa...';box.append(status);try{
 if(['Produtos','Estoque','Venda Externa','PDV/Vendas','Pedidos','Mesas','Comandas','Caixa','Clientes','Financeiro','Relatórios','Cozinha/KDS'].includes(id)){
 if(id==='Cozinha/KDS'){cozinhaMobile(box);return}
-if(id==='PDV/Vendas'){topCincoVendasMobile(box);return}
+if(id==='PDV/Vendas'){if(!allowedModules.some(x=>['Financeiro','Relatórios','Configurações'].includes(x))){box.replaceChildren();box.append(line('Acompanhamento de vendas restrito','Este relatório exige permissão de gestão financeira ou relatórios no Painel Master.'));return}topCincoVendasMobile(box);return}
 if(id==='Clientes'){clientesMobile(box);return}
 if(id==='Financeiro'){monitorVendas(box);return}
 if(id==='Caixa'){
