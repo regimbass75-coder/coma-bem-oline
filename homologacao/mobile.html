@@ -138,52 +138,83 @@ box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
 function topCincoVendasMobile(box){
  box.replaceChildren();
- const title=document.createElement('h3');title.textContent='Vendas • Top 5 mais vendidos';
- const description=document.createElement('p');description.className='hint';description.textContent='Ranking por quantidade de produtos vendidos, a partir das vendas registradas no servidor.';
- const status=document.createElement('p');status.className='hint';
- const ranking=document.createElement('div'),history=document.createElement('div');
- box.append(title,description,status,ranking,history);
+ const heading=document.createElement('h3');heading.textContent='Acompanhamento de vendas';
+ const hint=document.createElement('p');hint.className='hint';hint.textContent='Relatório do período selecionado • dados sincronizados da empresa.';
+ const dates=document.createElement('div');dates.style.cssText='display:flex;gap:10px;flex-wrap:wrap;margin:12px 0';
+ const today=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
+ const from=document.createElement('input');from.type='date';from.value=today;from.setAttribute('aria-label','Data inicial');
+ const to=document.createElement('input');to.type='date';to.value=today;to.setAttribute('aria-label','Data final');
+ const apply=document.createElement('button');apply.className='primary';apply.type='button';apply.textContent='Consultar período';
+ dates.append(from,to,apply);
+ const status=document.createElement('p');status.className='hint';status.setAttribute('role','status');
+ const metrics=document.createElement('div');metrics.className='cash-cards';
+ const payments=document.createElement('section'),ranking=document.createElement('section'),history=document.createElement('section');
+ box.append(heading,hint,dates,status,metrics,payments,ranking,history);
  const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const dateOf=x=>{
+  const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;
+  if(!raw)return null;
+  const match=String(raw).match(/^(\\d{4}-\\d{2}-\\d{2})/);
+  if(match)return match[1];
+  const dt=new Date(raw);return Number.isNaN(dt.getTime())?null:dt.toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
+ };
+ const cancelled=x=>/CANCEL|ESTORN|ANULAD/i.test(String(x.status||''));
+ const metric=(name,value)=>{const card=document.createElement('div');card.className='cash-metric';const label=document.createElement('small');label.textContent=name;const strong=document.createElement('strong');strong.textContent=value;card.append(label,strong);metrics.append(card)};
  let busy=false;
  async function refresh(){
   if(busy||!box.isConnected||document.hidden)return;
-  busy=true;
+  if(!from.value||!to.value||from.value>to.value){status.textContent='Informe um período válido: data inicial até data final.';return}
+  busy=true;apply.disabled=true;
   try{
-   const d=await call('sales_list');
-   const sales=Array.isArray(d.sales)?d.sales:[];
-   const valid=sales.filter(v=>!/CANCEL|ESTORN|ANULAD/i.test(String(v.status||'')));
-   const grouped=new Map();let itemized=0;
+   const d=await call('sales_list');const all=Array.isArray(d.sales)?d.sales:[];
+   const undated=all.filter(v=>!dateOf(v)).length;
+   const sales=all.filter(v=>{const date=dateOf(v);return date&&date>=from.value&&date<=to.value});
+   const valid=sales.filter(v=>!cancelled(v));
+   const value=x=>{const n=Number(x.total??x.valor_total??x.amount??x.valor);return Number.isFinite(n)?n:null};
+   const amountsComplete=valid.every(x=>value(x)!==null);
+   const total=amountsComplete?valid.reduce((sum,v)=>sum+value(v),0):null;
+   metrics.replaceChildren();payments.replaceChildren();ranking.replaceChildren();history.replaceChildren();
+   metric('Vendas realizadas',String(valid.length));
+   metric('Faturamento',total===null?'Não disponível':money(total));
+   metric('Ticket médio',total===null?'Não disponível':money(valid.length?total/valid.length:0));
+   metric('Canceladas',String(sales.length-valid.length));
+   status.textContent=sales.length+' venda(s) no período.'+(undated?' '+undated+' registro(s) sem data não incluídos.':'');
+   const byPayment=new Map(),byProduct=new Map();let withItems=0,withPayments=0;
    for(const sale of valid){
+    const parts=Array.isArray(sale.pagamentos)?sale.pagamentos:Array.isArray(sale.payments)?sale.payments:[];
+    if(parts.length)withPayments++;
+    for(const p of parts){
+     const key=String(p.forma||p.metodo||p.method||'Não informado');
+     const n=Number(p.valor??p.amount??0);
+     if(Number.isFinite(n))byPayment.set(key,(byPayment.get(key)||0)+n);
+    }
     const items=Array.isArray(sale.itens)?sale.itens:Array.isArray(sale.items)?sale.items:[];
-    if(items.length)itemized++;
+    if(items.length)withItems++;
     for(const item of items){
-     const nome=String(item.nome||item.name||'').trim(),qtd=Number(item.qtd??item.quantidade??item.quantity??0);
-     const preco=Number(item.preco??item.valor_unitario??item.price??0);
-     if(!nome||!Number.isFinite(qtd)||qtd<=0)continue;
-     const key=nome.toLocaleLowerCase('pt-BR');
-     const entry=grouped.get(key)||{nome,qtd:0,total:0};
-     entry.qtd+=qtd;if(Number.isFinite(preco)&&preco>=0)entry.total+=qtd*preco;
-     grouped.set(key,entry);
+     const nome=String(item.nome||item.name||'').trim(),q=Number(item.qtd??item.quantidade??item.quantity??0),price=Number(item.preco??item.price??item.valor_unitario??0);
+     if(!nome||!Number.isFinite(q)||q<=0)continue;
+     const key=nome.toLocaleLowerCase('pt-BR'),p=byProduct.get(key)||{nome,qtd:0,total:0};
+     p.qtd+=q;if(Number.isFinite(price))p.total+=q*price;byProduct.set(key,p);
     }
    }
-   const top=[...grouped.values()].sort((a,b)=>b.qtd-a.qtd||b.total-a.total).slice(0,5);
-   ranking.replaceChildren();history.replaceChildren();
-   status.textContent=sales.length+' vendas consultadas • '+itemized+' com produtos detalhados.';
-   if(!top.length)ranking.append(line('Top 5 indisponível',sales.length?'As vendas retornadas não contêm produtos detalhados para calcular o ranking.':'Ainda não há vendas registradas.'));
-   for(let i=0;i<top.length;i++){
-    const p=top[i];ranking.append(line((i+1)+'º • '+p.nome,p.qtd.toLocaleString('pt-BR')+' unidades • '+money(p.total)));
+   const payHeading=document.createElement('h3');payHeading.textContent='Formas de pagamento';payments.append(payHeading);
+   if(!withPayments)payments.append(line('Detalhamento indisponível','As vendas retornadas não informam pagamentos separados.'));
+   for(const [name,amount] of [...byPayment].sort((a,b)=>b[1]-a[1]))payments.append(line(name,money(amount)));
+   const topHeading=document.createElement('h3');topHeading.textContent='Top 5 — Produtos mais vendidos';ranking.append(topHeading);
+   const top=[...byProduct.values()].sort((a,b)=>b.qtd-a.qtd||b.total-a.total).slice(0,5);
+   if(!top.length)ranking.append(line('Sem produtos detalhados',withItems?'Não foi possível identificar produtos válidos.':'Nenhuma venda com itens detalhados no período.'));
+   for(let i=0;i<top.length;i++)ranking.append(line((i+1)+'º • '+top[i].nome,top[i].qtd.toLocaleString('pt-BR')+' unidades • '+money(top[i].total)));
+   const histHeading=document.createElement('h3');histHeading.textContent='Vendas do período';history.append(histHeading);
+   if(!sales.length)history.append(line('Nenhuma venda encontrada','Altere as datas para consultar outro período.'));
+   for(const sale of sales.slice().reverse().slice(0,100)){
+    const v=value(sale);history.append(line((dateOf(sale)||'')+' • '+String(sale.cliente||sale.numero||sale.id||'Venda'),String(sale.status||'Registrada')+' • '+(v===null?'Valor não informado':money(v))));
    }
-   const h=document.createElement('h3');h.textContent='Últimas vendas';history.append(h);
-   if(!sales.length)history.append(line('Nenhuma venda encontrada','Aguardando registros do servidor.'));
-   for(const v of sales.slice(-15).reverse()){
-    const value=Number(v.total??v.valor_total??v.amount);
-    history.append(line(String(v.cliente||v.numero||v.id||'Venda'),String(v.status||'Registrada')+' • '+(Number.isFinite(value)?money(value):'Valor não informado')));
-   }
+   if(sales.length>100)history.append(line('Exibindo 100 vendas','O resumo acima considera todos os registros retornados no período.'));
   }catch(e){status.textContent='Não foi possível consultar as vendas: '+e.message}
-  finally{busy=false}
+  finally{busy=false;apply.disabled=false}
  }
- refresh();
- const timer=setInterval(()=>{if(!box.isConnected||!ranking.isConnected){clearInterval(timer);return}refresh()},10000);
+ apply.onclick=refresh;refresh();
+ const timer=setInterval(()=>{if(!box.isConnected||!metrics.isConnected){clearInterval(timer);return}refresh()},15000);
 }
 function clientesMobile(box){
  box.replaceChildren();
