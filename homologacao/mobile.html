@@ -141,11 +141,12 @@ async function abrirComandaMobile(box,command,back){
  const status=document.createElement('p');status.className='hint';status.textContent='Carregando produtos...';
  const itemsBox=document.createElement('div'),catalogBox=document.createElement('div'),cartBox=document.createElement('div');
  const sendBtn=document.createElement('button');sendBtn.className='primary';sendBtn.textContent='Registrar pedido na comanda';sendBtn.disabled=true;
- wrap.append(backBtn,heading,status,itemsBox,catalogBox,cartBox,sendBtn);
+ wrap.append(backBtn,heading,status,itemsBox,cartBox,catalogBox,sendBtn);
  const cart=new Map();let catalog=[];
  const money=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
  const refreshCart=()=>{
   cartBox.replaceChildren();
+  cartBox.append(line('Pedido em preparação',cart.size?money([...cart.values()].reduce((sum,p)=>sum+p.preco*p.qtd,0)):'Toque em um produto para adicionar.'));
   for(const p of cart.values())cartBox.append(line(p.qtd+'× '+p.nome,money(p.preco*p.qtd)));
   sendBtn.disabled=!cart.size;
  };
@@ -177,14 +178,15 @@ async function abrirComandaMobile(box,command,back){
  try{
   const d=await call('stock_catalog');
   catalog=(d.produtos||[]).filter(x=>x&&x.nome).map(x=>({nome:String(x.nome),preco:Number(x.preco??x.precoVenda??0),grupo:String(x.grupo||x.categoria||'Outros')})).filter(x=>Number.isFinite(x.preco));
-  status.textContent='Selecione os produtos e registre o pedido.';
+  status.textContent='Digite o nome ou toque em um dos cinco produtos abaixo.';
+  refreshCart();
   const search=document.createElement('input');search.placeholder='Buscar produto';search.type='search';catalogBox.append(search);
-  const products=document.createElement('div');catalogBox.append(products);
+  const products=document.createElement('div');products.className='tiles';catalogBox.append(products);
   const renderProducts=()=>{
    products.replaceChildren();
-   for(const p of catalog.filter(p=>p.nome.toLowerCase().includes(search.value.toLowerCase())).slice(0,80)){
+   for(const p of catalog.filter(p=>p.nome.toLowerCase().includes(search.value.toLowerCase())).slice(0,5)){
     const btn=document.createElement('button');btn.type='button';btn.className='tile';btn.textContent=p.nome+' • '+money(p.preco);
-    btn.onclick=()=>{const x=cart.get(p.nome)||{...p,qtd:0};x.qtd++;cart.set(p.nome,x);refreshCart()};
+    btn.onclick=()=>{const key=p.nome+'|'+p.preco;const x=cart.get(key)||{...p,qtd:0};x.qtd++;cart.set(key,x);refreshCart();status.textContent=p.nome+' adicionado ao pedido ('+x.qtd+'×).';};
     products.append(btn)
    }
   };search.oninput=renderProducts;renderProducts();await refreshExisting();
