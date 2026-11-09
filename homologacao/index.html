@@ -1667,7 +1667,19 @@ for(let i of pdv){let e=estoque.find(x=>x.nome===i.nome);if(!ugPoliticaEstoque()
  }
  if(tipoVenda==="MESA"&&mesaVenda){
    let m=mesas.find(x=>String(x.id)===String(mesaVenda)||String(x.numero)===String(mesaVenda));
-   if(m){m.status="LIVRE";m.itens=[];m.total=0;m.cliente="";m.abertura=null;m.pedido_numero=null;m.fechada_em=new Date().toISOString();}
+   if(m){
+    m.status="LIVRE";m.itens=[];m.total=0;m.cliente="";m.abertura=null;m.pedido_numero=null;m.fechada_em=new Date().toISOString();m.pedidos_mobile_recebidos=[];
+    try{
+     const closeResponse=await fetch('./licenca/api.php?action=tables_sync',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'close_table',mesa:Number(m.numero)})});
+     const closeData=await closeResponse.json();
+     if(!closeResponse.ok||!closeData.ok)throw Error(closeData.erro||'Servidor não confirmou o fechamento');
+     m.fechada_em=closeData.fechada_em;
+     ugMesasBase=null;ugAgendarMesasSync();
+    }catch(closeError){
+     console.error('Falha ao liberar mesa no servidor:',closeError);
+     alert('A venda foi registrada, mas a mesa não foi liberada no servidor: '+closeError.message+'. Verifique a sincronização antes de receber outro pedido.');
+    }
+   }
    localStorage.removeItem("cb_hom_mesa_pdv");
    localStorage.setItem("cb_hom_tipo_venda","BALCÃO");
    if(typeof renderMesas==="function")renderMesas();
