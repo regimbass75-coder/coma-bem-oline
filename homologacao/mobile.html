@@ -216,7 +216,16 @@ async function abrirComandaMobile(box,command,back){
    const items=[...(current.itens||[]),...additions];
    rows[idx]={...current,status:'ABERTA',itens:items,total:items.reduce((sum,p)=>sum+Number(p.preco||0)*Number(p.qtd||0),0),abertura:current.abertura||new Date().toISOString()};
    await call('commands_sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:Number(d.revision||0),comandas:rows})});
-   cart.clear();refreshCart();status.textContent='Pedido registrado na comanda. Confira no computador.';await refreshExisting();
+   cart.clear();refreshCart();status.textContent='Pedido registrado na comanda. Enviando à cozinha...';await refreshExisting();
+   try{
+    const kd=await call('kitchen_sync');
+    const existing=Array.isArray(kd.pedidos)?kd.pedidos:[];
+    const orderId='CMD-'+String(command.numero)+'-'+Date.now().toString(36);
+    const order={id:orderId,origem:'COMANDA '+String(command.numero).padStart(2,'0'),comanda:Number(command.numero),itens:additions,status:'ENVIADO',hora:new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})};
+    await call('kitchen_sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pedidos:[order,...existing]})});
+    status.textContent='Pedido registrado e enviado à cozinha.';
+   }catch(kitchenError){status.textContent='Pedido salvo na comanda, mas envio à cozinha não confirmado: '+kitchenError.message+'. Confira na cozinha antes de repetir.'}
+
   }catch(e){status.textContent='Pedido não confirmado: '+e.message+'. Confira a comanda antes de tentar novamente.'}
   finally{sendBtn.disabled=!cart.size}
  };
