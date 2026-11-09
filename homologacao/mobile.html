@@ -77,7 +77,24 @@ if(id==='Caixa'){
  for(const x of sales.slice(0,20)){const v=Number(x.total??x.valor_total??x.amount);box.append(line(String(x.cliente||x.numero||x.id||'Venda'),(x.status?String(x.status)+' • ':'')+(Number.isFinite(v)?'R$ '+v.toFixed(2).replace(',','.').replace('.',','):'Valor não informado')))}
  return
 }
-if(id==='Mesas'){const d=await call('tables_sync');box.replaceChildren();box.append(line('Mesas do restaurante • '+d.mesas.length,d.atualizado_em?'Sincronização: '+new Date(d.atualizado_em).toLocaleString('pt-BR'):'Aguardando primeira sincronização do computador'));if(!d.disponivel)box.append(line('Aguardando mesas do computador','Abra o UniGestor no computador com usuário administrador ou gerente e mantenha a internet ativa para publicar as mesas.'));const grid=document.createElement('div');grid.className='tiles';for(const m of d.mesas){const btn=document.createElement('button');btn.className='tile';btn.type='button';const status=String(m.status||'LIVRE');btn.textContent='Mesa '+m.numero+' • '+status;btn.onclick=()=>abrirMesaMobile(box,m,()=>openModule(id,title,desc));grid.append(btn)}box.append(grid);return}
+if(id==='Mesas'){
+ const d=await call('tables_sync');box.replaceChildren();
+ const heading=line('Mesas do restaurante • '+d.mesas.length,d.atualizado_em?'Sincronização: '+new Date(d.atualizado_em).toLocaleString('pt-BR'):'Aguardando primeira sincronização do computador');box.append(heading);
+ if(!d.disponivel)box.append(line('Aguardando mesas do computador','Abra o UniGestor no computador com usuário administrador ou gerente e mantenha a internet ativa para publicar as mesas.'));
+ const grid=document.createElement('div');grid.className='tiles';box.append(grid);
+ const renderTiles=rows=>{grid.replaceChildren();for(const m of rows){const btn=document.createElement('button');btn.className='tile';btn.type='button';btn.textContent='Mesa '+m.numero+' • '+String(m.status||'LIVRE');btn.onclick=()=>abrirMesaMobile(box,m,()=>openModule(id,title,desc));grid.append(btn)}};
+ renderTiles(d.mesas);
+ let refreshing=false;
+ const timer=setInterval(async()=>{
+  if(!box.isConnected){clearInterval(timer);return}
+  if(document.hidden||refreshing||!grid.isConnected){if(!grid.isConnected)clearInterval(timer);return}
+  refreshing=true;
+  try{const next=await call('tables_sync');if(grid.isConnected&&Array.isArray(next.mesas))renderTiles(next.mesas)}
+  catch(e){console.warn('Atualização automática das mesas:',e.message)}
+  finally{refreshing=false}
+ },3000);
+ return
+}
 if(id==='Comandas'){box.replaceChildren();box.append(line('Comandas do restaurante','A sincronização operacional de comandas ainda está em desenvolvimento. Não são exibidos DAF como comandas.'));return}
 const source={'Produtos':['stock_catalog','produtos','Produtos'],'Estoque':['stock_catalog','produtos','Estoque'],'Venda Externa':['orders_list','orders','Pedidos externos'],'PDV/Vendas':['sales_list','sales','Vendas realizadas'],'Pedidos':['daf_list','dafs','Pré-vendas / DAF'],'Caixa':['sales_list','sales','Vendas registradas'],'Clientes':['customers_list','customers','Clientes'],'Financeiro':['credit_receipts_list','receipts','Recebimentos de crédito'],'Relatórios':['sales_list','sales','Resumo de vendas']}[id];
 const [action,key,heading]=source;const d=await call(action);box.replaceChildren();const rows=Array.isArray(d[key])?d[key]:[];box.append(line(heading+' • '+rows.length,'Consulta ao servidor • '+(id==='Mesas'||id==='Comandas'?'Esta consulta é de DAF, não representa mesas/comandas abertas.':id==='Caixa'?'Histórico de vendas; abertura e fechamento de caixa ainda não integrados.':'Dados da empresa')));
@@ -114,6 +131,10 @@ async function abrirMesaMobile(box,m,voltar){
    if(!root.isConnected)return;
    const kitchen=new Map((kitchenData.pedidos||[]).filter(x=>x&&x.id).map(x=>[String(x.id),x]));
    const liveTable=(tablesData.mesas||[]).find(x=>Number(x.numero)===Number(m.numero))||m;
+   // Return to the table list when checkout on desktop closes this session.
+   if(liveTable.status==='LIVRE'&&liveTable.fechada_em&&(!m.fechada_em||Date.parse(liveTable.fechada_em)>Date.parse(m.fechada_em))){
+    cart.clear();voltar();return;
+   }
    const closed=Date.parse(liveTable.fechada_em||'');
    const orders=(tableData.pedidos||[]).filter(x=>{
     if(Number(x.mesa)!==Number(m.numero)||x.status==='CANCELADO'||x.status==='FINALIZADO')return false;
