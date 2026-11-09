@@ -1040,6 +1040,29 @@ async function ugPublicarMesas(){
   if(!response.ok||!server.ok||!Array.isArray(server.mesas))throw Error(server.erro||'Não foi possível consultar mesas');
   if(String(window.__cbRestaurante?.id)!==tenant)return;
   const remote=ugMesasNormalizar(server.mesas),rev=Number(server.revision||0);
+  // Reconcile mobile waiter orders on EVERY poll, not only on the first kitchen receipt.
+  // The tables snapshot can lag behind table_orders and must not turn an active mobile table free.
+  try{
+   const ordersResponse=await fetch('./licenca/api.php?action=table_orders',{credentials:'same-origin',cache:'no-store'});
+   const ordersData=await ordersResponse.json();
+   if(ordersResponse.ok&&ordersData.ok&&Array.isArray(ordersData.pedidos)){
+    for(const order of ordersData.pedidos){
+     if(!order||!order.id||order.status==='CANCELADO'||order.status==='FINALIZADO')continue;
+     const mesa=remote.find(x=>Number(x.numero)===Number(order.mesa));
+     if(!mesa||mesa.status==='FECHADA')continue;
+     const received=Array.isArray(mesa.pedidos_mobile_recebidos)?mesa.pedidos_mobile_recebidos:[];
+     if(!received.includes(order.id)){
+      mesa.itens=[...(mesa.itens||[]),...(Array.isArray(order.itens)?order.itens.map(p=>({...p})):[])];
+      mesa.total=mesa.itens.reduce((v,p)=>v+Number(p.preco||0)*Number(p.qtd||0),0);
+      mesa.pedidos_mobile_recebidos=[...received,order.id];
+     }
+     mesa.status='OCUPADA';
+     if(order.cliente&&!mesa.cliente)mesa.cliente=order.cliente;
+     if(order.pessoas&&!mesa.pessoas)mesa.pessoas=order.pessoas;
+    }
+   }
+  }catch(e){console.warn('Conciliação de pedidos mobile:',e.message)}
+
   if(ugMesasTenant!==tenant){ugMesasTenant=tenant;ugMesasRevision=null;ugMesasBase=null}
   if(ugMesasBase===null){
    if(server.disponivel){
