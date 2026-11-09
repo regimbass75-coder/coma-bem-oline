@@ -64,22 +64,7 @@ if(id==='Cozinha/KDS'){cozinhaMobile(box);return}
 if(id==='PDV/Vendas'){if(!allowedModules.some(x=>['Financeiro','Relatórios','Configurações'].includes(x))){box.replaceChildren();box.append(line('Acompanhamento de vendas restrito','Este relatório exige permissão de gestão financeira ou relatórios no Painel Master.'));return}topCincoVendasMobile(box);return}
 if(id==='Clientes'){clientesMobile(box);return}
 if(id==='Financeiro'){monitorVendas(box);return}
-if(id==='Caixa'){
- const d=await call('sales_list');const sales=Array.isArray(d.sales)?d.sales:[];
- box.replaceChildren();
- const head=document.createElement('div');head.className='cash-head';const h=document.createElement('h3');h.textContent='Resumo de vendas';const desc=document.createElement('p');desc.textContent='Consulta de vendas registradas no servidor. Não representa o saldo nem a situação do caixa aberto no computador.';head.append(h,desc);box.append(head);
- const cards=document.createElement('div');cards.className='cash-cards';
- const metric=(title,value)=>{const card=document.createElement('div');card.className='cash-metric';const t=document.createElement('small');t.textContent=title;const v=document.createElement('strong');v.textContent=value;card.append(t,v);cards.append(card)};
- metric('Vendas registradas',String(sales.length));
- const amounts=sales.map(x=>Number(x.total??x.valor_total??x.amount)).filter(Number.isFinite);
- if(amounts.length===sales.length&&sales.length)metric('Total das vendas','R$ '+amounts.reduce((a,b)=>a+b,0).toFixed(2).replace('.',','));else metric('Total das vendas','Não disponível');
- box.append(cards);
- const notice=document.createElement('div');notice.className='cash-notice';const strong=document.createElement('strong');strong.textContent='Caixa operacional';const p=document.createElement('p');p.textContent='Abertura, fechamento, sangria, suprimento, saldo em dinheiro e conferência de pagamentos ainda não estão sincronizados com o celular. Use o caixa do computador para essas operações até concluirmos a integração.';notice.append(strong,p);box.append(notice);
- const title=document.createElement('h3');title.textContent='Últimas vendas';box.append(title);
- if(!sales.length)box.append(line('Nenhuma venda encontrada','O servidor não retornou vendas para esta empresa.'));
- for(const x of sales.slice(0,20)){const v=Number(x.total??x.valor_total??x.amount);box.append(line(String(x.cliente||x.numero||x.id||'Venda'),(x.status?String(x.status)+' • ':'')+(Number.isFinite(v)?'R$ '+v.toFixed(2).replace(',','.').replace('.',','):'Valor não informado')))}
- return
-}
+if(id==='Caixa'){resumoCaixaMobile(box);return}
 if(id==='Mesas'){
  const d=await call('tables_sync');box.replaceChildren();
  const heading=line('Mesas do restaurante • '+d.mesas.length,d.atualizado_em?'Sincronização: '+new Date(d.atualizado_em).toLocaleString('pt-BR'):'Aguardando primeira sincronização do computador');box.append(heading);
@@ -136,6 +121,67 @@ if(!rows.length)box.append(line('Nenhum registro encontrado','A consulta foi rea
 for(const item of rows.slice(0,150)){let label='',detail='';if(action==='stock_catalog'){label=String(item.nome||'Produto');detail='R$ '+Number(item.preco??item.precoVenda??0).toFixed(2).replace('.',',')}else if(action==='customers_list'){label=String(item.nome||'Cliente');detail=String(item.telefone||item.cpf||'')}else if(action==='credit_receipts_list'){label='Recebimento '+String(item.id||'');detail='R$ '+Number(item.amount||0).toFixed(2).replace('.',',')}else{label=String(item.cliente||item.numero||item.id||'Registro');detail=String(item.status||'')+' • R$ '+Number(item.total||0).toFixed(2).replace('.',',')}box.append(line(label,detail))}return}
 box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '+title+' está em preparação para o celular. Nenhuma alteração será enviada ao servidor nesta etapa.'));
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
+function resumoCaixaMobile(box){
+ box.replaceChildren();
+ const heading=document.createElement('h3');heading.textContent='Resumo do caixa';
+ const status=document.createElement('p');status.className='hint';status.setAttribute('role','status');
+ const cards=document.createElement('div');cards.className='cash-cards';
+ const details=document.createElement('div');
+ box.append(heading,status,cards,details);
+ const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const today=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'});
+ const dateOf=x=>{const raw=x.criado_em??x.created_at??x.data_hora??x.data??x.date??x.timestamp;if(!raw)return null;const m=String(raw).match(/^(\\d{4}-\\d{2}-\\d{2})/);if(m)return m[1];const d=new Date(raw);return Number.isNaN(d.getTime())?null:d.toLocaleDateString('sv-SE',{timeZone:'America/Fortaleza'})};
+ const metric=(name,value)=>{const card=document.createElement('div');card.className='cash-metric';const small=document.createElement('small');small.textContent=name;const strong=document.createElement('strong');strong.textContent=value;card.append(small,strong);cards.append(card)};
+ let busy=false;
+ async function refresh(){
+  if(busy||!box.isConnected||document.hidden)return;busy=true;
+  try{
+   const [salesResponse,cashResponse]=await Promise.allSettled([call('sales_list'),call('cash_state')]);
+   cards.replaceChildren();details.replaceChildren();
+   const sales=salesResponse.status==='fulfilled'&&Array.isArray(salesResponse.value.sales)?salesResponse.value.sales:null;
+   const cash=cashResponse.status==='fulfilled'?cashResponse.value:null;
+   const state=cash?.disponivel&&cash.state?cash.state:null;
+   metric('Situação do caixa',state?(state.aberto?'Aberto':'Fechado'):'Não disponível');
+   if(state)metric('Valor inicial',money(state.inicial));
+   if(sales){
+    const day=today(),dated=sales.filter(v=>dateOf(v)===day),valid=dated.filter(v=>!/CANCEL|ESTORN|ANULAD/i.test(String(v.status||'')));
+    const amounts=valid.map(v=>Number(v.total??v.valor_total??v.amount??v.valor));
+    const complete=amounts.every(Number.isFinite);
+    metric('Vendas de hoje',String(valid.length));
+    metric('Total vendido',complete?money(amounts.reduce((a,b)=>a+b,0)):'Não disponível');
+    const payments=new Map();let withPayments=0;
+    for(const sale of valid){
+     const list=Array.isArray(sale.pagamentos)?sale.pagamentos:Array.isArray(sale.payments)?sale.payments:[];
+     if(list.length)withPayments++;
+     for(const p of list){
+      const raw=String(p.forma||p.metodo||p.method||'OUTROS').toUpperCase();
+      const key=raw.includes('PIX')?'Pix':raw.includes('DINHEIRO')?'Dinheiro':raw.includes('CART')||raw.includes('DÉBITO')||raw.includes('DEBITO')||raw.includes('CRÉDITO')||raw.includes('CREDITO')?'Cartões':raw;
+      const value=Number(p.valor??p.amount);
+      if(Number.isFinite(value))payments.set(key,(payments.get(key)||0)+value);
+     }
+    }
+    for(const key of ['Dinheiro','Pix','Cartões'])metric(key,withPayments?money(payments.get(key)||0):'Não disponível');
+    for(const [key,value] of payments)if(!['Dinheiro','Pix','Cartões'].includes(key))metric(key,money(value));
+    if(!withPayments&&valid.length)details.append(line('Pagamentos sem detalhamento','Não é possível separar dinheiro, Pix e cartões com os dados retornados.'));
+    if(sales.some(v=>!dateOf(v)))details.append(line('Atenção','Existem vendas sem data reconhecível, não incluídas no resumo de hoje.'));
+   }else details.append(line('Vendas indisponíveis',salesResponse.reason?.message||'Não foi possível consultar vendas.'));
+   if(state&&Array.isArray(state.movs)){
+    const movements=state.movs;
+    const sum=type=>movements.filter(m=>String(m.tipo||'').toUpperCase()===type).reduce((a,m)=>a+Number(m.valor||0),0);
+    metric('Sangrias',money(sum('SANGRIA')));metric('Suprimentos',money(sum('SUPRIMENTO')));
+    const section=document.createElement('h3');section.textContent='Movimentações do caixa';details.append(section);
+    for(const m of movements.slice(0,20))details.append(line(String(m.tipo||'Movimento')+' • '+money(m.valor),String(m.hora||'')+' '+String(m.obs||'')));
+    if(!movements.length)details.append(line('Nenhuma movimentação registrada',''));
+   }else{
+    metric('Sangrias','Não disponível');metric('Suprimentos','Não disponível');
+    details.append(line('Movimentações do caixa','O servidor não disponibilizou sangrias e suprimentos para consulta no celular.'));
+   }
+   status.textContent='Consulta de hoje • '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+' • Somente leitura';
+  }catch(e){status.textContent='Não foi possível atualizar o caixa: '+e.message}
+  finally{busy=false}
+ }
+ refresh();const timer=setInterval(()=>{if(!box.isConnected||!cards.isConnected){clearInterval(timer);return}refresh()},10000);
+}
 function topCincoVendasMobile(box){
  box.replaceChildren();
  const heading=document.createElement('h3');heading.textContent='Acompanhamento de vendas';
