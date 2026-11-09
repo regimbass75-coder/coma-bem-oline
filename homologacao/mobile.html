@@ -59,7 +59,8 @@ function monitorVendas(box){
  refresh();salesMonitorTimer=setInterval(refresh,5000);
 }
 async function openModule(id,title,desc){stopSalesMonitor();el('moduleTitle').textContent=title;el('moduleDescription').textContent=desc;el('dashboard').hidden=true;el('moduleView').hidden=false;window.scrollTo({top:0,behavior:'instant'});const box=el('moduleContent');box.replaceChildren();const status=document.createElement('p');status.className='hint';status.textContent='Carregando informações da empresa...';box.append(status);try{
-if(['Produtos','Estoque','Venda Externa','PDV/Vendas','Pedidos','Mesas','Comandas','Caixa','Clientes','Financeiro','Relatórios'].includes(id)){
+if(['Produtos','Estoque','Venda Externa','PDV/Vendas','Pedidos','Mesas','Comandas','Caixa','Clientes','Financeiro','Relatórios','Cozinha/KDS'].includes(id)){
+if(id==='Cozinha/KDS'){cozinhaMobile(box);return}
 if(id==='Financeiro'){monitorVendas(box);return}
 if(id==='Caixa'){
  const d=await call('sales_list');const sales=Array.isArray(d.sales)?d.sales:[];
@@ -133,6 +134,50 @@ if(!rows.length)box.append(line('Nenhum registro encontrado','A consulta foi rea
 for(const item of rows.slice(0,150)){let label='',detail='';if(action==='stock_catalog'){label=String(item.nome||'Produto');detail='R$ '+Number(item.preco??item.precoVenda??0).toFixed(2).replace('.',',')}else if(action==='customers_list'){label=String(item.nome||'Cliente');detail=String(item.telefone||item.cpf||'')}else if(action==='credit_receipts_list'){label='Recebimento '+String(item.id||'');detail='R$ '+Number(item.amount||0).toFixed(2).replace('.',',')}else{label=String(item.cliente||item.numero||item.id||'Registro');detail=String(item.status||'')+' • R$ '+Number(item.total||0).toFixed(2).replace('.',',')}box.append(line(label,detail))}return}
 box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '+title+' está em preparação para o celular. Nenhuma alteração será enviada ao servidor nesta etapa.'));
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
+function cozinhaMobile(box){
+ box.replaceChildren();
+ const title=document.createElement('h3');title.textContent='Cozinha • Pedidos em preparo';
+ const notice=document.createElement('p');notice.className='hint';notice.textContent='Atualização automática a cada 3 segundos.';
+ const orders=document.createElement('div');box.append(title,notice,orders);
+ let busy=false,updating=false,lastSignature='';
+ const labels={ENVIADO:'Novo pedido', 'EM PREPARO':'Em preparo',PRONTO:'Preparado',RETIRADO:'Retirado',ENTREGUE:'Finalizado'};
+ const steps={ENVIADO:['Iniciar preparo','EM PREPARO'],'EM PREPARO':['Marcar preparado','PRONTO'],PRONTO:['Finalizar','ENTREGUE']};
+ async function change(id,next){
+  if(updating)return;updating=true;notice.textContent='Salvando situação do pedido...';
+  try{
+   const d=await call('kitchen_sync');const list=Array.isArray(d.pedidos)?d.pedidos:[];
+   const item=list.find(p=>String(p.id)===String(id));
+   if(!item)throw Error('Pedido não encontrado no servidor');
+   const expected=Object.entries(steps).find(([k,v])=>v[1]===next)?.[0];
+   if(item.status!==expected)throw Error('Pedido foi atualizado em outro dispositivo. Aguarde a sincronização.');
+   const updated=list.map(p=>String(p.id)===String(id)?{...p,status:next,...(next==='ENTREGUE'?{retirado_em:new Date().toISOString()}:{})}:p);
+   await call('kitchen_sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pedidos:updated})});
+   notice.textContent='Pedido atualizado.';lastSignature='';await refresh();
+  }catch(e){notice.textContent='Não foi possível atualizar: '+e.message}
+  finally{updating=false}
+ }
+ async function refresh(){
+  if(busy||document.hidden||!orders.isConnected)return;busy=true;
+  try{
+   const d=await call('kitchen_sync');const list=(d.pedidos||[]).filter(p=>p&&p.id&&!['ENTREGUE','CANCELADO','FINALIZADO'].includes(p.status));
+   const signature=JSON.stringify(list);
+   if(signature===lastSignature)return;
+   lastSignature=signature;orders.replaceChildren();
+   if(!list.length)orders.append(line('Nenhum pedido pendente','Os novos pedidos aparecerão automaticamente.'));
+   for(const p of list){
+    const card=document.createElement('section');card.className='panel';card.style.cssText='margin:10px 0;padding:12px';
+    card.append(line(String(p.origem||('Pedido '+p.id)),labels[p.status]||String(p.status||'Novo pedido')));
+    for(const item of p.itens||[])card.append(line(String(item.qtd||1)+'× '+String(item.nome||'Produto'),String(item.observacao||'')));
+    const step=steps[p.status];
+    if(step){const btn=document.createElement('button');btn.type='button';btn.className='primary';btn.textContent=step[0];btn.onclick=()=>change(p.id,step[1]);card.append(btn)}
+    orders.append(card)
+   }
+  }catch(e){notice.textContent='Cozinha indisponível: '+e.message}
+  finally{busy=false}
+ }
+ refresh();
+ const timer=setInterval(()=>{if(!orders.isConnected){clearInterval(timer);return}refresh()},3000);
+}
 async function abrirComandaMobile(box,command,back){
  box.replaceChildren();
  const wrap=document.createElement('div');wrap.className='waiter-app';box.append(wrap);
