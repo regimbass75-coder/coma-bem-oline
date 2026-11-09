@@ -109,17 +109,7 @@ if(id==='Comandas'){
    const btn=document.createElement('button');btn.type='button';btn.className='tile';
    const status=String(c.status||'LIVRE');
    btn.textContent='Comanda '+String(c.numero).padStart(2,'0')+' • '+(status==='ABERTA'?'OCUPADA':status);
-   btn.onclick=()=>{
-    const existing=box.querySelector('[data-command-detail]');
-    if(existing)existing.remove();
-    const panel=document.createElement('section');panel.className='panel';panel.dataset.commandDetail='true';
-    panel.append(line('Comanda '+String(c.numero).padStart(2,'0'),status+' • R$ '+Number(c.total||0).toFixed(2).replace('.',',')));
-    const items=Array.isArray(c.itens)?c.itens:[];
-    if(!items.length)panel.append(line('Nenhum produto lançado','A comanda está sem produtos.'));
-    for(const item of items)panel.append(line(String(item.qtd||1)+'× '+String(item.nome||'Produto'),'R$ '+(Number(item.preco||0)*Number(item.qtd||1)).toFixed(2).replace('.',',')));
-    panel.append(line('Atendimento pelo celular','Nesta etapa, a comanda está disponível para consulta. O lançamento de pedidos será integrado em seguida.'));
-    box.append(panel);
-   };
+   btn.onclick=()=>abrirComandaMobile(box,c,()=>openModule(id,title,desc));
    grid.append(btn);
   }
  };
@@ -143,6 +133,63 @@ if(!rows.length)box.append(line('Nenhum registro encontrado','A consulta foi rea
 for(const item of rows.slice(0,150)){let label='',detail='';if(action==='stock_catalog'){label=String(item.nome||'Produto');detail='R$ '+Number(item.preco??item.precoVenda??0).toFixed(2).replace('.',',')}else if(action==='customers_list'){label=String(item.nome||'Cliente');detail=String(item.telefone||item.cpf||'')}else if(action==='credit_receipts_list'){label='Recebimento '+String(item.id||'');detail='R$ '+Number(item.amount||0).toFixed(2).replace('.',',')}else{label=String(item.cliente||item.numero||item.id||'Registro');detail=String(item.status||'')+' • R$ '+Number(item.total||0).toFixed(2).replace('.',',')}box.append(line(label,detail))}return}
 box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '+title+' está em preparação para o celular. Nenhuma alteração será enviada ao servidor nesta etapa.'));
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
+async function abrirComandaMobile(box,command,back){
+ box.replaceChildren();
+ const wrap=document.createElement('div');wrap.className='waiter-app';box.append(wrap);
+ const heading=document.createElement('h3');heading.textContent='Comanda '+String(command.numero).padStart(2,'0');
+ const backBtn=document.createElement('button');backBtn.className='primary';backBtn.textContent='‹ Voltar às comandas';backBtn.onclick=back;
+ const status=document.createElement('p');status.className='hint';status.textContent='Carregando produtos...';
+ const itemsBox=document.createElement('div'),catalogBox=document.createElement('div'),cartBox=document.createElement('div');
+ const sendBtn=document.createElement('button');sendBtn.className='primary';sendBtn.textContent='Registrar pedido na comanda';sendBtn.disabled=true;
+ wrap.append(backBtn,heading,status,itemsBox,catalogBox,cartBox,sendBtn);
+ const cart=new Map();let catalog=[];
+ const money=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
+ const refreshCart=()=>{
+  cartBox.replaceChildren();
+  for(const p of cart.values())cartBox.append(line(p.qtd+'× '+p.nome,money(p.preco*p.qtd)));
+  sendBtn.disabled=!cart.size;
+ };
+ const refreshExisting=async()=>{
+  const d=await call('commands_sync');
+  const current=(d.comandas||[]).find(x=>Number(x.numero)===Number(command.numero));
+  if(!current){status.textContent='Comanda não encontrada no servidor.';return}
+  itemsBox.replaceChildren();itemsBox.append(line('Produtos da comanda',String(current.status||'LIVRE')+' • '+money(current.total)));
+  for(const p of current.itens||[])itemsBox.append(line(String(p.qtd||1)+'× '+String(p.nome),money(Number(p.qtd||1)*Number(p.preco||0))));
+ };
+ sendBtn.onclick=async()=>{
+  if(!cart.size)return;
+  sendBtn.disabled=true;status.textContent='Registrando pedido...';
+  try{
+   const d=await call('commands_sync');
+   const rows=d.comandas||[];
+   const idx=rows.findIndex(x=>Number(x.numero)===Number(command.numero));
+   if(idx<0)throw Error('Comanda não encontrada');
+   const current=rows[idx];
+   if(current.status==='FECHADA')throw Error('Comanda fechada. Abra novamente no computador.');
+   const additions=[...cart.values()].map(p=>({nome:p.nome,qtd:p.qtd,preco:p.preco}));
+   const items=[...(current.itens||[]),...additions];
+   rows[idx]={...current,status:'ABERTA',itens:items,total:items.reduce((sum,p)=>sum+Number(p.preco||0)*Number(p.qtd||0),0),abertura:current.abertura||new Date().toISOString()};
+   await call('commands_sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:Number(d.revision||0),comandas:rows})});
+   cart.clear();refreshCart();status.textContent='Pedido registrado na comanda. Confira no computador.';await refreshExisting();
+  }catch(e){status.textContent='Pedido não confirmado: '+e.message+'. Confira a comanda antes de tentar novamente.'}
+  finally{sendBtn.disabled=!cart.size}
+ };
+ try{
+  const d=await call('stock_catalog');
+  catalog=(d.produtos||[]).filter(x=>x&&x.nome).map(x=>({nome:String(x.nome),preco:Number(x.preco??x.precoVenda??0),grupo:String(x.grupo||x.categoria||'Outros')})).filter(x=>Number.isFinite(x.preco));
+  status.textContent='Selecione os produtos e registre o pedido.';
+  const search=document.createElement('input');search.placeholder='Buscar produto';search.type='search';catalogBox.append(search);
+  const products=document.createElement('div');catalogBox.append(products);
+  const renderProducts=()=>{
+   products.replaceChildren();
+   for(const p of catalog.filter(p=>p.nome.toLowerCase().includes(search.value.toLowerCase())).slice(0,80)){
+    const btn=document.createElement('button');btn.type='button';btn.className='tile';btn.textContent=p.nome+' • '+money(p.preco);
+    btn.onclick=()=>{const x=cart.get(p.nome)||{...p,qtd:0};x.qtd++;cart.set(p.nome,x);refreshCart()};
+    products.append(btn)
+   }
+  };search.oninput=renderProducts;renderProducts();await refreshExisting();
+ }catch(e){status.textContent='Não foi possível carregar produtos: '+e.message}
+}
 async function abrirMesaMobile(box,m,voltar){
  box.replaceChildren();let catalog=[],group='Todos',screen='groups',pendingId=null,sending=false;
  let lastSuccess='';const cart=new Map(),money=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
