@@ -101,16 +101,23 @@ async function abrirMesaMobile(box,m,voltar){
  const orderHeading=document.createElement('strong');orderHeading.textContent='Pedidos da mesa';
  const orderList=document.createElement('div');orderPanel.append(orderHeading,orderList);
  const readyNotice=document.createElement('p');readyNotice.setAttribute('role','alert');readyNotice.style.cssText='font-weight:bold;color:#087c43';
- const seenReady=new Set();let firstOrderCheck=true,checkingOrders=false;
+ const seenReady=new Set();let firstOrderCheck=true,checkingOrders=false,existingCount=0,existingTotal=0;
  const moneyOrder=n=>'R$ '+Number(n||0).toFixed(2).replace('.',',');
  async function refreshTableOrders(){
   if(checkingOrders||!root.isConnected||document.hidden)return;
   checkingOrders=true;
   try{
-   const [tableData,kitchenData]=await Promise.all([call('table_orders'),call('kitchen_sync')]);
+   const tableData=await call('table_orders');
+   // Kitchen access may be restricted for waiter accounts. Never hide table items if KDS fails.
+   let kitchenData={pedidos:[]};
+   try{kitchenData=await call('kitchen_sync')}catch(e){console.warn('Status da cozinha indisponível:',e.message)}
    if(!root.isConnected)return;
    const kitchen=new Map((kitchenData.pedidos||[]).filter(x=>x&&x.id).map(x=>[String(x.id),x]));
    const orders=(tableData.pedidos||[]).filter(x=>Number(x.mesa)===Number(m.numero));
+   existingCount=orders.reduce((n,o)=>n+(o.itens||[]).reduce((sum,p)=>sum+Number(p.qtd||0),0),0);
+   existingTotal=orders.reduce((n,o)=>n+(o.itens||[]).reduce((sum,p)=>sum+Number(p.qtd||0)*Number(p.preco||0),0),0);
+   const summary=footer.querySelector('[data-table-summary]');
+   if(summary)summary.textContent=existingCount+' itens na mesa · '+moneyOrder(existingTotal)+(count()?' • '+count()+' novos':'');
    orderList.replaceChildren();
    if(!orders.length)orderList.textContent='Nenhum pedido registrado nesta mesa.';
    for(const order of orders){
@@ -170,7 +177,7 @@ async function abrirMesaMobile(box,m,voltar){
   }
   if(screen==='details')footer.append(button('Continuar para categorias',()=>go('groups'),'waiter-main'));
   else if(screen==='review')footer.append(button(sending?'Enviando...':'Confirmar e enviar à cozinha',send,'waiter-main'));
-  else{const summary=document.createElement('span');summary.textContent=count()+' itens · '+money(amount());footer.append(summary);footer.append(button('Ver pedido →',()=>count()?go('review'):go('details'),'waiter-main'))}
+  else{const summary=document.createElement('span');summary.dataset.tableSummary='1';summary.textContent=existingCount+' itens na mesa · '+money(existingTotal)+(count()?' • '+count()+' novos':'');footer.append(summary);footer.append(button(count()?'Conferir novos itens →':'Ver pedido da mesa',()=>count()?go('review'):orderPanel.scrollIntoView({behavior:'smooth',block:'start'}),'waiter-main'))}
  }
  async function send(){
   if(sending||!cart.size)return;
