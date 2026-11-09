@@ -326,6 +326,12 @@ def homolog_master_bridge():
                                 return jsonify({'ok': False, 'erro': 'Mesa não encontrada.'}), 404
                             closed_at = now_iso()
                             target.update({'status':'LIVRE','itens':[],'total':0,'cliente':'','abertura':None,'pedido_numero':None,'fechada_em':closed_at,'pedidos_mobile_recebidos':[]})
+                            cur.execute('''UPDATE ug_pedidos_mesa
+                                SET dados=jsonb_set(dados, '{status}', '"FINALIZADO"'::jsonb)
+                                WHERE restaurant_id=%s AND mesa=%s
+                                  AND criado_em<=%s::timestamptz
+                                  AND dados->>'status' NOT IN ('FINALIZADO','CANCELADO')''',
+                                (company, close_number, closed_at))
                             cur.execute('UPDATE ug_mesas_mobile SET mesas=%s::jsonb,atualizado_em=clock_timestamp() WHERE restaurant_id=%s', (json.dumps(rows), company))
                             return jsonify({'ok':True,'mesa':target,'fechada_em':closed_at})
                 except Exception:
