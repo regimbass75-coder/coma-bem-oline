@@ -61,6 +61,7 @@ function monitorVendas(box){
 async function openModule(id,title,desc){stopSalesMonitor();el('moduleTitle').textContent=title;el('moduleDescription').textContent=desc;el('dashboard').hidden=true;el('moduleView').hidden=false;window.scrollTo({top:0,behavior:'instant'});const box=el('moduleContent');box.replaceChildren();const status=document.createElement('p');status.className='hint';status.textContent='Carregando informações da empresa...';box.append(status);try{
 if(['Produtos','Estoque','Venda Externa','PDV/Vendas','Pedidos','Mesas','Comandas','Caixa','Clientes','Financeiro','Relatórios','Cozinha/KDS'].includes(id)){
 if(id==='Cozinha/KDS'){cozinhaMobile(box);return}
+if(id==='Clientes'){clientesMobile(box);return}
 if(id==='Financeiro'){monitorVendas(box);return}
 if(id==='Caixa'){
  const d=await call('sales_list');const sales=Array.isArray(d.sales)?d.sales:[];
@@ -134,6 +135,65 @@ if(!rows.length)box.append(line('Nenhum registro encontrado','A consulta foi rea
 for(const item of rows.slice(0,150)){let label='',detail='';if(action==='stock_catalog'){label=String(item.nome||'Produto');detail='R$ '+Number(item.preco??item.precoVenda??0).toFixed(2).replace('.',',')}else if(action==='customers_list'){label=String(item.nome||'Cliente');detail=String(item.telefone||item.cpf||'')}else if(action==='credit_receipts_list'){label='Recebimento '+String(item.id||'');detail='R$ '+Number(item.amount||0).toFixed(2).replace('.',',')}else{label=String(item.cliente||item.numero||item.id||'Registro');detail=String(item.status||'')+' • R$ '+Number(item.total||0).toFixed(2).replace('.',',')}box.append(line(label,detail))}return}
 box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '+title+' está em preparação para o celular. Nenhuma alteração será enviada ao servidor nesta etapa.'));
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
+function clientesMobile(box){
+ box.replaceChildren();
+ const title=document.createElement('h3');title.textContent='Cadastro de clientes';
+ const newBtn=document.createElement('button');newBtn.type='button';newBtn.className='primary';newBtn.textContent='+ Novo cliente';
+ const search=document.createElement('input');search.type='search';search.placeholder='Pesquisar por nome, CPF ou telefone';
+ const result=document.createElement('div'),detail=document.createElement('div'),feedback=document.createElement('p');feedback.className='hint';feedback.setAttribute('role','status');
+ box.append(title,newBtn,search,feedback,detail,result);
+ let customers=[];
+ const showDetails=c=>{
+  detail.replaceChildren();
+  const panel=document.createElement('section');panel.className='panel';panel.style.cssText='padding:12px;margin:10px 0';
+  panel.append(line(c.nome||'Cliente','CPF: '+(c.cpf||'Não informado')));
+  panel.append(line('Telefone',c.telefone||'Não informado'));
+  panel.append(line('Endereço',c.endereco||'Não informado'));
+  detail.append(panel);
+ };
+ const render=()=>{
+  result.replaceChildren();
+  const q=search.value.trim().toLocaleLowerCase('pt-BR');
+  const matches=customers.filter(c=>(String(c.nome||'')+' '+String(c.cpf||'')+' '+String(c.telefone||'')).toLocaleLowerCase('pt-BR').includes(q)).slice(0,30);
+  if(!matches.length)result.append(line('Nenhum cliente encontrado','Use + Novo cliente para cadastrar.'));
+  for(const c of matches){const btn=document.createElement('button');btn.type='button';btn.className='tile';btn.style.cssText='display:block;width:100%;margin:5px 0;text-align:left';btn.textContent=String(c.nome||'Cliente')+' • '+String(c.telefone||c.cpf||'');btn.onclick=()=>showDetails(c);result.append(btn)}
+ };
+ const reload=async()=>{
+  const d=await call('customers_list');customers=Array.isArray(d.customers)?d.customers:[];feedback.textContent=customers.length+' cliente(s) sincronizado(s).';render()
+ };
+ search.oninput=render;
+ newBtn.onclick=()=>{
+  detail.replaceChildren();
+  const form=document.createElement('form');form.className='panel';form.style.cssText='padding:12px;margin:10px 0';
+  const heading=document.createElement('h3');heading.textContent='Novo cliente';form.append(heading);
+  const field=(label,max,type='text')=>{const wrap=document.createElement('label');wrap.textContent=label;const input=document.createElement('input');input.type=type;input.maxLength=max;input.style.cssText='display:block;width:100%;margin:6px 0 12px';wrap.append(input);form.append(wrap);return input};
+  const name=field('Nome completo *',120),cpf=field('CPF (opcional)',14),phone=field('Telefone',25,'tel'),address=field('Endereço',250);
+  name.required=true;
+  const save=document.createElement('button');save.type='submit';save.className='primary';save.textContent='Salvar cliente';form.append(save);
+  const message=document.createElement('p');message.className='hint';message.setAttribute('role','status');form.append(message);
+  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancelar';cancel.onclick=()=>form.remove();form.append(cancel);
+  detail.append(form);
+  form.onsubmit=async e=>{
+   e.preventDefault();
+   const nome=name.value.trim(),digits=cpf.value.replace(/\D/g,'');
+   if(!nome){message.textContent='Informe o nome do cliente.';return}
+   if(digits&&digits.length!==11){message.textContent='CPF deve conter 11 dígitos.';return}
+   save.disabled=true;message.textContent='Salvando no servidor...';
+   try{
+    if(digits&&customers.some(c=>String(c.cpf||'').replace(/\D/g,'')===digits))throw Error('CPF já cadastrado nesta empresa.');
+    const id='MOBCLI-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,9);
+    const customer={id,nome,cpf:digits,telefone:phone.value.trim(),endereco:address.value.trim(),creditoLimite:0,ativo:true};
+    await call('customers_save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(customer)});
+    const verify=await call('customers_list');
+    if(!(verify.customers||[]).some(c=>String(c.id)===id))throw Error('O servidor não confirmou o cadastro. Consulte a lista antes de tentar novamente.');
+    customers=verify.customers;feedback.textContent='Cliente cadastrado e sincronizado.';render();showDetails(customers.find(c=>String(c.id)===id));
+   }catch(err){message.textContent='Cadastro não confirmado: '+err.message}
+   finally{save.disabled=false}
+  };
+  name.focus()
+ };
+ reload().catch(e=>{feedback.textContent='Não foi possível consultar os clientes: '+e.message});
+}
 function cozinhaMobile(box){
  box.replaceChildren();
  const title=document.createElement('h3');title.textContent='Cozinha • Pedidos em preparo';
