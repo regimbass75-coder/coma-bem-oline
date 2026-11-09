@@ -1002,7 +1002,7 @@ const ugMesasJson=x=>JSON.stringify(x||[],function(k,v){
  }
  return v;
 });
-const ugMesasNormalizar=rows=>(rows||[]).map(x=>{const m={...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]};if(m.status==="OCUPADA"&&!m.itens.length&&!(Number(m.total)>0)){m.status="LIVRE";m.abertura=null;m.pedido_numero=null}return m});
+const ugMesasNormalizar=rows=>(rows||[]).map(x=>{const m={...x,itens:Array.isArray(x.itens)?x.itens.map(p=>({...p})):[]};/* Mesa ocupada pelo celular pode ainda não ter itens incorporados ao PDV. Não liberar automaticamente. */return m});
 function ugMesasAplicarRemoto(rows){
  const active=localStorage.getItem('cb_hom_tipo_venda')==='MESA'?localStorage.getItem('cb_hom_mesa_pdv'):null;
  const oldRows=mesas;
@@ -1224,7 +1224,17 @@ async function ugReceberPedidosMesa(){
    kitchen.unshift({...order,status:'ENVIADO',origem:'MESA '+String(order.mesa).padStart(2,'0')});
    existing.add(order.id);changed=true;
    const mesa=mesas.find(x=>Number(x.numero)===Number(order.mesa));
-   if(mesa){mesa.status='OCUPADA';mesa.cliente=order.cliente||mesa.cliente||'';mesa.pessoas=order.pessoas||mesa.pessoas||1}
+   if(mesa){
+    const received=Array.isArray(mesa.pedidos_mobile_recebidos)?mesa.pedidos_mobile_recebidos:[];
+    if(!received.includes(order.id)){
+     const incoming=Array.isArray(order.itens)?order.itens.map(p=>({...p})): [];
+     mesa.itens=[...(Array.isArray(mesa.itens)?mesa.itens:[]),...incoming];
+     mesa.total=mesa.itens.reduce((v,p)=>v+Number(p.preco||0)*Number(p.qtd||0),0);
+     mesa.pedidos_mobile_recebidos=[...received,order.id];
+     changed=true;
+    }
+    mesa.status='OCUPADA';mesa.cliente=order.cliente||mesa.cliente||'';mesa.pessoas=order.pessoas||mesa.pessoas||1;
+   }
   }
   if(changed){ugSalvarCozinhaLocal(kitchen);salvarInterno();renderKds();renderPedidos();renderDashboard();renderMesas()}
  }catch(e){console.warn('Recebimento de pedidos de mesa:',e.message)}
