@@ -107,13 +107,19 @@ async function abrirMesaMobile(box,m,voltar){
   if(checkingOrders||!root.isConnected||document.hidden)return;
   checkingOrders=true;
   try{
-   const tableData=await call('table_orders');
+   const [tableData,tablesData]=await Promise.all([call('table_orders'),call('tables_sync')]);
    // Kitchen access may be restricted for waiter accounts. Never hide table items if KDS fails.
    let kitchenData={pedidos:[]};
    try{kitchenData=await call('kitchen_sync')}catch(e){console.warn('Status da cozinha indisponível:',e.message)}
    if(!root.isConnected)return;
    const kitchen=new Map((kitchenData.pedidos||[]).filter(x=>x&&x.id).map(x=>[String(x.id),x]));
-   const orders=(tableData.pedidos||[]).filter(x=>Number(x.mesa)===Number(m.numero));
+   const liveTable=(tablesData.mesas||[]).find(x=>Number(x.numero)===Number(m.numero))||m;
+   const closed=Date.parse(liveTable.fechada_em||'');
+   const orders=(tableData.pedidos||[]).filter(x=>{
+    if(Number(x.mesa)!==Number(m.numero)||x.status==='CANCELADO'||x.status==='FINALIZADO')return false;
+    const created=Date.parse(x.criado_em||'');
+    return !(Number.isFinite(closed)&&Number.isFinite(created)&&created<=closed);
+   });
    existingCount=orders.reduce((n,o)=>n+(o.itens||[]).reduce((sum,p)=>sum+Number(p.qtd||0),0),0);
    existingTotal=orders.reduce((n,o)=>n+(o.itens||[]).reduce((sum,p)=>sum+Number(p.qtd||0)*Number(p.preco||0),0),0);
    const summary=footer.querySelector('[data-table-summary]');
