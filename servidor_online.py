@@ -306,6 +306,31 @@ def homolog_master_bridge():
             if str(user.get('role') or '').upper() not in ('ADMINISTRADOR', 'GERENTE') or not any(x in modules for x in ('Mesas', 'Configurações')):
                 return jsonify({'ok': False, 'erro': 'Sem permissão para publicar mesas.'}), 403
             payload = request.get_json(silent=True) or {}
+            if payload.get('operation') == 'close_table':
+                try:
+                    close_number = int(payload.get('mesa', 0))
+                except (TypeError, ValueError):
+                    close_number = 0
+                if not 1 <= close_number <= 500:
+                    return jsonify({'ok': False, 'erro': 'Número de mesa inválido.'}), 400
+                try:
+                    with get_conn() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT mesas FROM ug_mesas_mobile WHERE restaurant_id=%s FOR UPDATE', (company,))
+                            found = cur.fetchone()
+                            if not found:
+                                return jsonify({'ok': False, 'erro': 'Mesas não cadastradas no servidor.'}), 404
+                            rows = found[0]
+                            target = next((m for m in rows if int(m.get('numero',0)) == close_number), None)
+                            if target is None:
+                                return jsonify({'ok': False, 'erro': 'Mesa não encontrada.'}), 404
+                            closed_at = now_iso()
+                            target.update({'status':'LIVRE','itens':[],'total':0,'cliente':'','abertura':None,'pedido_numero':None,'fechada_em':closed_at,'pedidos_mobile_recebidos':[]})
+                            cur.execute('UPDATE ug_mesas_mobile SET mesas=%s::jsonb,atualizado_em=clock_timestamp() WHERE restaurant_id=%s', (json.dumps(rows), company))
+                            return jsonify({'ok':True,'mesa':target,'fechada_em':closed_at})
+                except Exception:
+                    app.logger.exception('Falha ao fechar mesa')
+                    return jsonify({'ok':False,'erro':'Não foi possível liberar a mesa no servidor.'}),503
             mesas = payload.get('mesas')
             if not isinstance(mesas, list) or len(mesas) > 500:
                 return jsonify({'ok': False, 'erro': 'Lista de mesas inválida.'}), 400
