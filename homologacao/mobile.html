@@ -61,6 +61,7 @@ function monitorVendas(box){
 async function openModule(id,title,desc){stopSalesMonitor();el('moduleTitle').textContent=title;el('moduleDescription').textContent=desc;el('dashboard').hidden=true;el('moduleView').hidden=false;window.scrollTo({top:0,behavior:'instant'});const box=el('moduleContent');box.replaceChildren();const status=document.createElement('p');status.className='hint';status.textContent='Carregando informações da empresa...';box.append(status);try{
 if(['Produtos','Estoque','Venda Externa','PDV/Vendas','Pedidos','Mesas','Comandas','Caixa','Clientes','Financeiro','Relatórios','Cozinha/KDS'].includes(id)){
 if(id==='Cozinha/KDS'){cozinhaMobile(box);return}
+if(id==='PDV/Vendas'){topCincoVendasMobile(box);return}
 if(id==='Clientes'){clientesMobile(box);return}
 if(id==='Financeiro'){monitorVendas(box);return}
 if(id==='Caixa'){
@@ -135,6 +136,55 @@ if(!rows.length)box.append(line('Nenhum registro encontrado','A consulta foi rea
 for(const item of rows.slice(0,150)){let label='',detail='';if(action==='stock_catalog'){label=String(item.nome||'Produto');detail='R$ '+Number(item.preco??item.precoVenda??0).toFixed(2).replace('.',',')}else if(action==='customers_list'){label=String(item.nome||'Cliente');detail=String(item.telefone||item.cpf||'')}else if(action==='credit_receipts_list'){label='Recebimento '+String(item.id||'');detail='R$ '+Number(item.amount||0).toFixed(2).replace('.',',')}else{label=String(item.cliente||item.numero||item.id||'Registro');detail=String(item.status||'')+' • R$ '+Number(item.total||0).toFixed(2).replace('.',',')}box.append(line(label,detail))}return}
 box.replaceChildren();box.append(line('Módulo autorizado','A tela operacional '+title+' está em preparação para o celular. Nenhuma alteração será enviada ao servidor nesta etapa.'));
 }catch(e){box.replaceChildren();box.append(line('Consulta indisponível',e.message||'Não foi possível consultar o servidor.'))}}
+function topCincoVendasMobile(box){
+ box.replaceChildren();
+ const title=document.createElement('h3');title.textContent='Vendas • Top 5 mais vendidos';
+ const description=document.createElement('p');description.className='hint';description.textContent='Ranking por quantidade de produtos vendidos, a partir das vendas registradas no servidor.';
+ const status=document.createElement('p');status.className='hint';
+ const ranking=document.createElement('div'),history=document.createElement('div');
+ box.append(title,description,status,ranking,history);
+ const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ let busy=false;
+ async function refresh(){
+  if(busy||!box.isConnected||document.hidden)return;
+  busy=true;
+  try{
+   const d=await call('sales_list');
+   const sales=Array.isArray(d.sales)?d.sales:[];
+   const valid=sales.filter(v=>!/CANCEL|ESTORN|ANULAD/i.test(String(v.status||'')));
+   const grouped=new Map();let itemized=0;
+   for(const sale of valid){
+    const items=Array.isArray(sale.itens)?sale.itens:Array.isArray(sale.items)?sale.items:[];
+    if(items.length)itemized++;
+    for(const item of items){
+     const nome=String(item.nome||item.name||'').trim(),qtd=Number(item.qtd??item.quantidade??item.quantity??0);
+     const preco=Number(item.preco??item.valor_unitario??item.price??0);
+     if(!nome||!Number.isFinite(qtd)||qtd<=0)continue;
+     const key=nome.toLocaleLowerCase('pt-BR');
+     const entry=grouped.get(key)||{nome,qtd:0,total:0};
+     entry.qtd+=qtd;if(Number.isFinite(preco)&&preco>=0)entry.total+=qtd*preco;
+     grouped.set(key,entry);
+    }
+   }
+   const top=[...grouped.values()].sort((a,b)=>b.qtd-a.qtd||b.total-a.total).slice(0,5);
+   ranking.replaceChildren();history.replaceChildren();
+   status.textContent=sales.length+' vendas consultadas • '+itemized+' com produtos detalhados.';
+   if(!top.length)ranking.append(line('Top 5 indisponível',sales.length?'As vendas retornadas não contêm produtos detalhados para calcular o ranking.':'Ainda não há vendas registradas.'));
+   for(let i=0;i<top.length;i++){
+    const p=top[i];ranking.append(line((i+1)+'º • '+p.nome,p.qtd.toLocaleString('pt-BR')+' unidades • '+money(p.total)));
+   }
+   const h=document.createElement('h3');h.textContent='Últimas vendas';history.append(h);
+   if(!sales.length)history.append(line('Nenhuma venda encontrada','Aguardando registros do servidor.'));
+   for(const v of sales.slice(-15).reverse()){
+    const value=Number(v.total??v.valor_total??v.amount);
+    history.append(line(String(v.cliente||v.numero||v.id||'Venda'),String(v.status||'Registrada')+' • '+(Number.isFinite(value)?money(value):'Valor não informado')));
+   }
+  }catch(e){status.textContent='Não foi possível consultar as vendas: '+e.message}
+  finally{busy=false}
+ }
+ refresh();
+ const timer=setInterval(()=>{if(!box.isConnected||!ranking.isConnected){clearInterval(timer);return}refresh()},10000);
+}
 function clientesMobile(box){
  box.replaceChildren();
  const title=document.createElement('h3');title.textContent='Cadastro de clientes';
