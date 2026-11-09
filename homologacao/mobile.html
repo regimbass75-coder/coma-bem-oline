@@ -95,7 +95,46 @@ if(id==='Mesas'){
  },3000);
  return
 }
-if(id==='Comandas'){box.replaceChildren();box.append(line('Comandas do restaurante','A sincronização operacional de comandas ainda está em desenvolvimento. Não são exibidos DAF como comandas.'));return}
+if(id==='Comandas'){
+ const d=await call('commands_sync');box.replaceChildren();
+ const heading=line('Comandas do restaurante • '+(d.comandas||[]).length,'Sincronização com o computador');box.append(heading);
+ const grid=document.createElement('div');grid.className='tiles';box.append(grid);
+ let lastSignature='';
+ const renderCommands=rows=>{
+  const signature=JSON.stringify(rows);
+  if(signature===lastSignature)return;
+  lastSignature=signature;grid.replaceChildren();
+  if(!rows.length){grid.append(line('Nenhuma comanda cadastrada','Abra o módulo Comandas no computador para publicar as comandas.'));return}
+  for(const c of rows){
+   const btn=document.createElement('button');btn.type='button';btn.className='tile';
+   const status=String(c.status||'LIVRE');
+   btn.textContent='Comanda '+String(c.numero).padStart(2,'0')+' • '+(status==='ABERTA'?'OCUPADA':status);
+   btn.onclick=()=>{
+    const existing=box.querySelector('[data-command-detail]');
+    if(existing)existing.remove();
+    const panel=document.createElement('section');panel.className='panel';panel.dataset.commandDetail='true';
+    panel.append(line('Comanda '+String(c.numero).padStart(2,'0'),status+' • R$ '+Number(c.total||0).toFixed(2).replace('.',',')));
+    const items=Array.isArray(c.itens)?c.itens:[];
+    if(!items.length)panel.append(line('Nenhum produto lançado','A comanda está sem produtos.'));
+    for(const item of items)panel.append(line(String(item.qtd||1)+'× '+String(item.nome||'Produto'),'R$ '+(Number(item.preco||0)*Number(item.qtd||1)).toFixed(2).replace('.',',')));
+    panel.append(line('Atendimento pelo celular','Nesta etapa, a comanda está disponível para consulta. O lançamento de pedidos será integrado em seguida.'));
+    box.append(panel);
+   };
+   grid.append(btn);
+  }
+ };
+ renderCommands(d.comandas||[]);
+ let busy=false;
+ const timer=setInterval(async()=>{
+  if(!box.isConnected||!grid.isConnected){clearInterval(timer);return}
+  if(document.hidden||busy)return;
+  busy=true;
+  try{const next=await call('commands_sync');if(grid.isConnected)renderCommands(next.comandas||[])}
+  catch(e){console.warn('Atualização das comandas:',e.message)}
+  finally{busy=false}
+ },3000);
+ return
+}
 const source={'Produtos':['stock_catalog','produtos','Produtos'],'Estoque':['stock_catalog','produtos','Estoque'],'Venda Externa':['orders_list','orders','Pedidos externos'],'PDV/Vendas':['sales_list','sales','Vendas realizadas'],'Pedidos':['daf_list','dafs','Pré-vendas / DAF'],'Caixa':['sales_list','sales','Vendas registradas'],'Clientes':['customers_list','customers','Clientes'],'Financeiro':['credit_receipts_list','receipts','Recebimentos de crédito'],'Relatórios':['sales_list','sales','Resumo de vendas']}[id];
 const [action,key,heading]=source;const d=await call(action);box.replaceChildren();const rows=Array.isArray(d[key])?d[key]:[];box.append(line(heading+' • '+rows.length,'Consulta ao servidor • '+(id==='Mesas'||id==='Comandas'?'Esta consulta é de DAF, não representa mesas/comandas abertas.':id==='Caixa'?'Histórico de vendas; abertura e fechamento de caixa ainda não integrados.':'Dados da empresa')));
 if(id==='Venda Externa'&&allowedModules.some(x=>['PDV/Vendas','Caixa'].includes(x))){const newBtn=document.createElement('button');newBtn.className='primary';newBtn.textContent='+ Novo pedido externo';newBtn.onclick=()=>orderForm(box);box.append(newBtn)}
